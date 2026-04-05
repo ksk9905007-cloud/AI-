@@ -7,6 +7,7 @@ from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory
 import os
 import requests
+import threading
 from flask_cors import CORS
 from playwright.sync_api import sync_playwright
 
@@ -99,18 +100,21 @@ _lotto_cache_time = {}
 CACHE_TTL = 3600  # 1시간
 
 # 진행 상황 추적용 전역 변수
-PURCHASE_STATUS = {} # { "user_id": { "status": "대기 중", "logs": [] } }
+PURCHASE_STATUS = {} # { "user_id": { "status": "대기 중", "logs": [], "result": None } }
 
-def update_status(user_id, msg):
+def update_status(user_id, msg, result=None):
     """현재 진행 상황을 전역 변수에 기록하여 클라이언트에 전달"""
     if not user_id: return
     uid = user_id.lower().strip()
     if uid not in PURCHASE_STATUS:
-        PURCHASE_STATUS[uid] = {"status": "초기화 중", "logs": []}
+        PURCHASE_STATUS[uid] = {"status": "초기화 중", "logs": [], "result": None}
     
     timestamp = datetime.now().strftime('%H:%M:%S')
     PURCHASE_STATUS[uid]["status"] = msg
     PURCHASE_STATUS[uid]["logs"].append(f"[{timestamp}] {msg}")
+    
+    if result is not None:
+        PURCHASE_STATUS[uid]["result"] = result
     
     # 로그가 너무 많아지면 오래된 로그 20개만 유지
     if len(PURCHASE_STATUS[uid]["logs"]) > 20:
@@ -1158,6 +1162,32 @@ def automate_purchase(user_id, user_pw, numbers):
             browser.close()
 
 
+def automate_purchase_wrapper(user_id, user_pw, numbers):
+    """구매 자동화를 별도 스레드에서 실행하고 최종 결과를 기록"""
+    try:
+        success, res_msg = automate_purchase(user_id, user_pw, numbers)
+        
+        # 튜플/데이터 파싱
+        final_data = None
+        if success:
+            # 성공 시 데이터 로드
+            try:
+                draw_no = get_purchase_draw_no()
+                record = add_purchase_record(user_id, draw_no, numbers)
+                final_data = {
+                    "draw_no": draw_no,
+                    "numbers": numbers,
+                    "purchased_at": record["purchased_at"]
+                }
+            except Exception as e:
+                logger.error(f"Post-purchase record failed: {e}")
+
+        update_status(user_id, res_msg, result={"success": success, "message": res_msg, "data": final_data})
+    except Exception as e:
+        logger.error(f"Background purchase error: {e}")
+        update_status(user_id, "엔진 비정상 종료", result={"success": False, "message": str(e)})
+
+
 # ─────────────────────────────────────────────────────────
 #  Flask 라우트
 # ─────────────────────────────────────────────────────────
@@ -1171,7 +1201,7 @@ def get_purchase_status_endpoint():
     uid = request.args.get('id', '').lower().strip()
     if not uid:
         return jsonify({"status": "알 수 없음", "logs": []})
-    status = PURCHASE_STATUS.get(uid, {"status": "진행 전", "logs": ["기록된 데이터가 없습니다."]})
+    status = PURCHASE_STATUS.get(uid, {"status": "진행 전", "logs": ["기록된 데이터가 없습니다."], "result": None})
     return jsonify(status)
 
 
@@ -1184,22 +1214,21 @@ def health():
 def buy_endpoint():
     data = request.json
     uid = data.get('id', '')
-    pw = data.get('pw', '')
+    upw = data.get('pw', '')
     numbers = data.get('numbers', [])
 
-    success, msg = automate_purchase(uid, pw, numbers)
+    if not uid or not upw or len(numbers) != 6:
+        return jsonify({"success": False, "message": "필수 정보가 누락되었습니다."})
 
-    if success:
-        draw_no = get_purchase_draw_no()
-        record = add_purchase_record(uid, draw_no, numbers)
-        return jsonify({
-            "success": True,
-            "message": msg,
-            "draw_no": draw_no,
-            "numbers": numbers,
-            "purchased_at": record["purchased_at"]
-        })
-    return jsonify({"success": False, "message": msg})
+    # 기존 진행 상태 초기화 후 스레드 시작
+    uid_key = uid.lower().strip()
+    PURCHASE_STATUS[uid_key] = {"status": "브라우저 엔진 생성 시작...", "logs": ["구매 요청 접수"], "result": None}
+    
+    thread = threading.Thread(target=automate_purchase_wrapper, args=(uid, upw, numbers))
+    thread.daemon = True
+    thread.start()
+
+    return jsonify({"success": True, "message": "구매 엔진이 서버에서 구동을 시작했습니다."})
 
 
 @app.route('/latest')

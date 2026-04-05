@@ -1083,7 +1083,8 @@
         closePurchaseModal();
         openProgressModal();
         
-        let pollingInterval = startStatusPolling(uid);
+        // 폴링 시작 (최종 결과 처리를 폴링 함수에서 담당하도록 변경)
+        startStatusPolling(uid);
 
         try {
             const resp = await fetch(`${API_BASE}/buy`, {
@@ -1093,20 +1094,15 @@
             });
             const result = await resp.json();
             
-            clearInterval(pollingInterval);
-            closeProgressModal();
-
-            if (result.success) {
-                showSuccessModal(result);
-                loadPurchaseHistory(uid);
-            } else {
-                showToast(`구매 실패: ${result.message}`);
-                alert(`구매 실패: ${result.message}`);
+            if (!result.success) {
+                // 엔진 시작 자체가 실패한 경우
+                closeProgressModal();
+                showToast(`구매 요청 실패: ${result.message}`);
             }
+            // 정상 시작된 경우, polling에서 결과를 처리함
         } catch (e) {
-            clearInterval(pollingInterval);
             closeProgressModal();
-            showToast("서버 오류가 발생했습니다.");
+            showToast("서버 연결에 실패했습니다.");
             console.error(e);
         }
     }
@@ -1148,6 +1144,21 @@
                             return `<div style="color: ${color}; margin-bottom: 4px;">${log}</div>`;
                         }).join('');
                         console.scrollTop = console.scrollHeight;
+                    }
+
+                    // 최종 결과 확인
+                    if (data.result) {
+                        clearInterval(interval);
+                        setTimeout(() => {
+                            closeProgressModal();
+                            if (data.result.success) {
+                                showSuccessModal(data.result.data || data.result);
+                                loadHistory(uid);
+                            } else {
+                                showToast(`구매 실패: ${data.result.message}`);
+                                alert(`구매 실패: ${data.result.message}`);
+                            }
+                        }, 1500); // 마지막 로그를 볼 수 있도록 잠시 대기
                     }
                 }
             } catch (e) {
