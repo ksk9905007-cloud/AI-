@@ -444,12 +444,17 @@ def do_login(page, user_id, user_pw):
 def find_game_frame(page):
     for _ in range(20):
         try:
-            frame = page.frame(url=lambda u: "game645" in u)
-            if frame:
-                return frame
+            # 1. URL이나 name에 game645가 포함된 프레임 탐색
+            for f in page.frames:
+                if "game645" in f.url.lower() or "game645" in f.name.lower():
+                    return f
+            # 2. 동행복권의 핵심 iframe 이름인 ifrm_lotto645 추가 연동
+            for f in page.frames:
+                if "ifrm_lotto645" in f.name.lower() or "lotto645" in f.url.lower():
+                    return f
         except:
             pass
-        time.sleep(0.4)
+        time.sleep(0.5)
     return None
 
 
@@ -536,7 +541,15 @@ def do_purchase(page, numbers):
         logger.info("  [2/7] game645 iframe 탐색...")
         frame = find_game_frame(page)
         if not frame:
-            return False, "game645 iframe을 찾지 못했습니다."
+            cur_url = page.url
+            page_text = page.evaluate("() => document.body.innerText.substring(0, 300)")
+            logger.error(f"  [FAIL] 타겟 프레임을 찾을 수 없음. URL: {cur_url}, 내용: {page_text}")
+            
+            if "login" in cur_url.lower(): return False, "로그인 세션이 만료되었습니다. 다시 로그인해 주세요."
+            if "점검" in page_text: return False, "동행복권 사이트 점검 시간입니다."
+            if "간소화" in page_text or "접속이 폭주" in page_text: return False, "동행복권 사이트가 현재 간소화 모드로 운영 중이어서 구매가 지연되고 있습니다."
+            
+            return False, "금융 거래용 보안 프레임을 찾지 못했습니다. 잠시 후 동기화 버튼을 다시 눌러주세요."
         logger.info(f"    iframe: {frame.url}")
 
         try:
