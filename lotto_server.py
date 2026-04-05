@@ -342,132 +342,70 @@ def do_login(page, user_id, user_pw):
     for login_url in LOGIN_URLS:
         try:
             update_status(user_id, f"로그인 페이지({login_url}) 접속 중...")
-            page.goto(login_url, wait_until="networkidle", timeout=30000)
-            time.sleep(1.5)
+            page.goto(login_url, wait_until="load", timeout=30000)
+            time.sleep(1.0)
 
-            # 현재 URL이 에러 페이지로 리다이렉트 되었는지 확인
-            cur_url = page.url
-            if "errorPage" in cur_url or "error" in cur_url.lower():
-                logger.warning(f"  [LOGIN] 에러 페이지로 리다이렉트됨: {cur_url}")
+            # 에러 페이지 체크
+            if "errorPage" in page.url or "error" in page.url.lower():
                 continue
 
-            # 로그인 폼 존재 여부 확인 (다양한 셀렉터 시도)
-            id_field = None
-            pw_field = None
-            login_btn = None
-
-            # 셀렉터 조합들
+            # 셀렉터 정의
             id_selectors = ["#inpUserId", "#userId", "input[name='userId']", "input[name='inpUserId']"]
             pw_selectors = ["#inpUserPswdEncn", "#userPswdEncn", "input[name='userPswdEncn']", "input[name='inpUserPswdEncn']"]
             btn_selectors = ["#btnLogin", ".login-btn", ".item-submit", "button[type='submit']", "input[type='submit']"]
 
-            # [OPTIMIZATION] 다중 셀렉터 결합 시도로 탐색 속도 향상
-            combined_id_sel = ",".join(id_selectors)
-            combined_pw_sel = ",".join(pw_selectors)
-            combined_btn_sel = ",".join(btn_selectors)
+            combined_id = ",".join(id_selectors)
+            combined_pw = ",".join(pw_selectors)
+            combined_btn = ",".join(btn_selectors)
 
             try:
-                # 첫 번째 유효한 요소가 나타날 때까지 대기 (최대 5초)
-                page.wait_for_selector(combined_id_sel, timeout=5000)
-                
-                # 실제 요소 핸들 획득
-                id_field = page.evaluate(f"() => {{ const el = document.querySelector('{combined_id_sel}'); return el ? el.id || el.name || '#'+el.id : null; }}")
-                pw_field = page.evaluate(f"() => {{ const el = document.querySelector('{combined_pw_sel}'); return el ? el.id || el.name || '#'+el.id : null; }}")
-                login_btn = page.evaluate(f"() => {{ const el = document.querySelector('{combined_btn_sel}'); return el ? el.id || el.name || '#'+el.id : null; }}")
-                
-                # evaluate가 ID나 name만 주므로 다시 selector 형식으로 보정
-                if id_field and not id_field.startswith('#'): id_field = f"[name='{id_field}'], #{id_field}"
-                if pw_field and not pw_field.startswith('#'): pw_field = f"[name='{pw_field}'], #{pw_field}"
-                if login_btn and not login_btn.startswith('#'): login_btn = f"[name='{login_btn}'], #{login_btn}"
-
-            except Exception as e:
-                logger.warning(f"  [LOGIN] 로그인 폼 요소 탐색 타임아웃: {e}")
+                page.wait_for_selector(combined_id, timeout=10000)
+                id_el = page.query_selector(combined_id)
+                pw_el = page.query_selector(combined_pw)
+                btn_el = page.query_selector(combined_btn)
+            except:
                 continue
 
-            if not id_field or not pw_field or not login_btn:
-                logger.warning(f"  [LOGIN] 로그인 폼 요소 매칭 실패")
+            if not id_el or not pw_el or not btn_el:
                 continue
 
-            logger.info(f"  [LOGIN] 폼 요소 발견: id={id_field}, pw={pw_field}, btn={login_btn}")
-
-            # 아이디 입력
-            page.fill(id_field, "")
-            page.type(id_field, user_id, delay=50)
-            time.sleep(0.3)
-
-            # 비밀번호 입력 (type으로 한 글자씩 입력하여 사이트 JS 이벤트 트리거)
-            page.fill(pw_field, "")
-            page.type(pw_field, user_pw, delay=50)
-            time.sleep(0.5)
-
-            # 사이트의 JS가 hidden 필드에 암호화된 비밀번호를 세팅할 시간 확보
-            # 일부 사이트에서 hidden 필드(userId, userPswdEncn)에 값을 복사하는 로직이 있음
+            # 입력 (보안 JS 대응)
+            id_el.click()
+            id_el.fill("")
+            id_el.type(user_id, delay=35)
+            
+            pw_el.click()
+            pw_el.fill("")
+            pw_el.type(user_pw, delay=45)
+            
+            # 사이트 암호화 로직 보완
             page.evaluate("""(args) => {
                 const [uid, upw] = args;
-                // hidden userId 필드에 값 세팅
-                const hiddenId = document.getElementById('userId');
-                if (hiddenId && hiddenId.type === 'hidden') {
-                    hiddenId.value = uid;
-                }
+                const hId = document.getElementById('userId');
+                if (hId && hId.type === 'hidden') hId.value = uid;
             }""", [user_id, user_pw])
-            time.sleep(0.5)
-
-            # 로그인 버튼 클릭 (확인 가능할 때까지 대기)
-            logger.info("  [LOGIN] 로그인 버튼 클릭...")
-            page.click(login_btn, force=True)
-
-            # [OPTIMIZATION] networkidle 대신 load를 사용하여 로딩 결과 산출 가속
-            try:
-                page.wait_for_load_state("load", timeout=15000)
-            except:
-                pass
+            
             time.sleep(1.0)
+            btn_el.click(force=True)
 
-            # 로그인 성공 확인 (여러 방법으로 판단)
-            for attempt in range(20):
-                # 방법 1: 페이지 내용에서 로그아웃 버튼/텍스트 존재 확인
+            # 결과 대기 및 확인
+            try: page.wait_for_load_state("load", timeout=20000)
+            except: pass
+            
+            time.sleep(2.0)
+            
+            for _ in range(15):
                 if is_logged_in(page):
-                    update_status(user_id, "로그인 완료! 마이페이지 확인 중...")
-                    logger.info("  [LOGIN] ✅ 로그인 성공!")
                     return True
-
-                # 방법 2: URL 변화 확인 (로그인 후 메인/마이페이지로 이동)
-                cur = page.url
-                if "login" not in cur.lower() and "error" not in cur.lower():
-                    # 로그인 페이지를 벗어났으면 성공 가능성 높음
-                    content = page.content()
-                    if user_id.lower() in content.lower() or "마이" in content or "my" in content.lower():
-                        logger.info(f"  [LOGIN] ✅ 로그인 성공 (URL 변화 감지: {cur})")
+                if "login" not in page.url.lower() and "error" not in page.url.lower():
+                    if "마이" in page.content() or "my" in page.content().lower():
                         return True
-
-                # 방법 3: 쿠키 확인 (JSESSIONID 등)
-                cookies = page.context.cookies()
-                session_cookies = [c for c in cookies if 'session' in c['name'].lower() or 'JSESSIONID' in c['name']]
-                if session_cookies and attempt > 3:
-                    # 세션 쿠키가 존재하고 로그인 페이지를 벗어났다면
-                    if "login" not in page.url.lower():
-                        logger.info(f"  [LOGIN] ✅ 로그인 성공 (세션 쿠키 감지)")
-                        return True
-
                 time.sleep(0.5)
 
-            # 로그인 실패 원인 파악
-            fail_content = page.evaluate("() => document.body.innerText.substring(0, 300)")
-            logger.error(f"  [LOGIN] ❌ 로그인 실패. 페이지 내용: {fail_content}")
-
-            # 에러 메시지 확인 (비밀번호 틀림 등)
-            error_msg = page.evaluate("""() => {
-                const alerts = document.querySelectorAll('.alert, .error, .err-msg, .login-error');
-                return Array.from(alerts).map(a => a.innerText).join(' ');
-            }""")
-            if error_msg:
-                logger.error(f"  [LOGIN] 에러 메시지: {error_msg}")
-
         except Exception as e:
-            logger.error(f"  [LOGIN] {login_url} 시도 중 오류: {e}")
+            logger.error(f"Login attempt error: {e}")
             continue
 
-    logger.error("  [LOGIN] 모든 로그인 시도 실패")
     return False
 
 
