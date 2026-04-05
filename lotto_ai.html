@@ -777,6 +777,25 @@
 <button class="btn btn-success btn-full" onclick="closeSuccessModal()">확인</button>
 </div>
 </div>
+<!-- 구매 진행 상태 모달 -->
+<div class="modal" id="progressModal">
+    <div class="modal-box" style="max-width: 500px; background: #1e293b; color: #fff; border: 1px solid #334155; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+        <div class="modal-title" style="color: #fff; font-size: 1.15rem; border-bottom: 1px solid #334155; padding-bottom: 1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 10px;">
+            <div class="ai-pulse" style="width: 12px; height: 12px; background: #fbbf24; border-radius: 50%;"></div>
+            동행복권 실시간 구매 엔진
+        </div>
+        <div id="currentStepStatus" style="font-size: 0.95rem; font-weight: 700; color: #fbbf24; margin-bottom: 1rem; padding: 0.75rem; background: rgba(251, 191, 36, 0.1); border-radius: 0.75rem; border: 1px solid rgba(251, 191, 36, 0.2);">
+            서버 연결 시도 중...
+        </div>
+        <div id="statusLogConsole" style="height: 220px; overflow-y: auto; background: #0f172a; border-radius: 1rem; padding: 1.25rem; font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 0.8rem; line-height: 1.6; border: 1px solid #334155; scroll-behavior: smooth;">
+            <div style="color: #64748b;">[SYSTEM] 엔진 초기화 대기 중...</div>
+        </div>
+        <p style="font-size: 0.75rem; color: #94a3b8; margin-top: 1.25rem; text-align: center; line-height: 1.4;">
+            🚀 보안 브라우저 엔진 구동 중입니다.<br/>
+            네트워크 상황에 따라 15~30초 정도 소요될 수 있으니 잠시만 기다려주세요.
+        </p>
+    </div>
+</div>
 <script>
     function switchNavTab(tabId) {
         document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -1048,6 +1067,94 @@
                 </tr>
             `;
         }).join('');
+    }
+
+    async function confirmPurchase() {
+        const uid = document.getElementById('modalId').value.trim();
+        const upw = document.getElementById('modalPw').value.trim();
+        
+        if (!uid || !upw) return showToast("아이디와 비밀번호를 입력해주세요.");
+        if (currentNums.length < 6) return showToast("구매할 번호 6개를 먼저 생성해주세요.");
+
+        // 본 기기에 로그인 정보 저장 (자동완성 편의용)
+        localStorage.setItem('dhl_id', uid);
+        localStorage.setItem('dhl_pw', upw);
+
+        closePurchaseModal();
+        openProgressModal();
+        
+        let pollingInterval = startStatusPolling(uid);
+
+        try {
+            const resp = await fetch(`${API_BASE}/buy`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: uid, pw: upw, numbers: currentNums })
+            });
+            const result = await resp.json();
+            
+            clearInterval(pollingInterval);
+            closeProgressModal();
+
+            if (result.success) {
+                showSuccessModal(result);
+                loadPurchaseHistory(uid);
+            } else {
+                showToast(`구매 실패: ${result.message}`);
+                alert(`구매 실패: ${result.message}`);
+            }
+        } catch (e) {
+            clearInterval(pollingInterval);
+            closeProgressModal();
+            showToast("서버 오류가 발생했습니다.");
+            console.error(e);
+        }
+    }
+
+    function openProgressModal() {
+        const modal = document.getElementById('progressModal');
+        const console = document.getElementById('statusLogConsole');
+        const current = document.getElementById('currentStepStatus');
+        
+        console.innerHTML = '<div style="color: #64748b;">[SYSTEM] 구매 프로세스 시작...</div>';
+        current.innerText = '엔진 초기화 중...';
+        modal.style.display = 'flex';
+        setTimeout(() => modal.classList.add('open'), 10);
+    }
+
+    function closeProgressModal() {
+        const modal = document.getElementById('progressModal');
+        modal.classList.remove('open');
+        setTimeout(() => modal.style.display = 'none', 300);
+    }
+
+    function startStatusPolling(uid) {
+        const console = document.getElementById('statusLogConsole');
+        const current = document.getElementById('currentStepStatus');
+        
+        const interval = setInterval(async () => {
+            try {
+                const resp = await fetch(`${API_BASE}/purchase_status?id=${uid}`);
+                const data = await resp.json();
+                
+                if (data.status) {
+                    current.innerText = data.status;
+                    if (data.logs && data.logs.length > 0) {
+                        console.innerHTML = data.logs.map(log => {
+                            let color = "#cbd5e1";
+                            if (log.includes("성공") || log.includes("완료")) color = "#34d399";
+                            if (log.includes("실패") || log.includes("오류")) color = "#fb7185";
+                            if (log.includes("접속") || log.includes("탐색")) color = "#94a3b8";
+                            return `<div style="color: ${color}; margin-bottom: 4px;">${log}</div>`;
+                        }).join('');
+                        console.scrollTop = console.scrollHeight;
+                    }
+                }
+            } catch (e) {
+                console.error("Status polling failed", e);
+            }
+        }, 1000);
+        return interval;
     }
 
     function filterHistory() {

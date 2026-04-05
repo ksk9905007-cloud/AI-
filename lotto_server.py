@@ -93,10 +93,30 @@ import time
 from datetime import datetime
 from playwright.sync_api import sync_playwright
 
-# 메모리 캐시 (60분간 유지)
+# 메모리 캐시 및 구매 진행 상황 (아이디별 실시간 처리 상황 모니터링)
 _lotto_cache = {}
 _lotto_cache_time = {}
 CACHE_TTL = 3600  # 1시간
+
+# 진행 상황 추적용 전역 변수
+PURCHASE_STATUS = {} # { "user_id": { "status": "대기 중", "logs": [] } }
+
+def update_status(user_id, msg):
+    """현재 진행 상황을 전역 변수에 기록하여 클라이언트에 전달"""
+    if not user_id: return
+    uid = user_id.lower().strip()
+    if uid not in PURCHASE_STATUS:
+        PURCHASE_STATUS[uid] = {"status": "초기화 중", "logs": []}
+    
+    timestamp = datetime.now().strftime('%H:%M:%S')
+    PURCHASE_STATUS[uid]["status"] = msg
+    PURCHASE_STATUS[uid]["logs"].append(f"[{timestamp}] {msg}")
+    
+    # 로그가 너무 많아지면 오래된 로그 20개만 유지
+    if len(PURCHASE_STATUS[uid]["logs"]) > 20:
+        PURCHASE_STATUS[uid]["logs"].pop(0)
+    
+    logger.info(f"  [STATUS][{uid}] {msg}")
 
 def get_lotto_info_by_no(draw_no):
     """동행복권 HTML 결과를 직접 파싱하여 가장 빠르고 안정적으로 데이터 획득 (Playwright 브라우저 우회)"""
@@ -317,7 +337,7 @@ def do_login(page, user_id, user_pw):
     """동행복권 로그인 (간소화/일반 모드 자동 대응)"""
     for login_url in LOGIN_URLS:
         try:
-            logger.info(f"  [LOGIN] 시도: {login_url}")
+            update_status(user_id, f"로그인 페이지({login_url}) 접속 중...")
             page.goto(login_url, wait_until="networkidle", timeout=30000)
             time.sleep(1.5)
 
@@ -407,6 +427,7 @@ def do_login(page, user_id, user_pw):
             for attempt in range(20):
                 # 방법 1: 페이지 내용에서 로그아웃 버튼/텍스트 존재 확인
                 if is_logged_in(page):
+                    update_status(user_id, "로그인 완료! 마이페이지 확인 중...")
                     logger.info("  [LOGIN] ✅ 로그인 성공!")
                     return True
 
@@ -454,18 +475,25 @@ def do_login(page, user_id, user_pw):
 #  iframe 탐색
 # ─────────────────────────────────────────────────────────
 def find_game_frame(page):
+    """구매 화면이 포함된 iframe을 내용 및 URL 기반으로 탐색"""
     for _ in range(30):
         try:
             # 1. URL이나 name에 game645가 포함된 프레임 탐색
             for f in page.frames:
-                if "game645" in f.url.lower() or "game645" in f.name.lower():
-                    logger.info(f"    [OK] 프레임 발견 (URL: {f.url})")
-                    return f
-            # 2. 동행복권 핵심 iframe 이름 (ifrm_lotto645)
+                try:
+                    if "game645" in f.url.lower() or "game645" in f.name.lower() or "lotto645" in f.url.lower():
+                        logger.info(f"    [OK] URL 기반 프레임 발견 (URL: {f.url[:50]}...)")
+                        return f
+                except: continue
+
+            # 2. 내용(Selector) 기반 탐색 (가장 확실함)
             for f in page.frames:
-                if "ifrm_lotto645" in f.name.lower() or "lotto645" in f.url.lower():
-                    logger.info(f"    [OK] ifrm 명칭 프레임 발견")
-                    return f
+                try:
+                    if f.query_selector("label[for^='check645num']"):
+                        logger.info(f"    [OK] 내용 기반 프레임 발견 (URL: {f.url[:50]}...)")
+                        return f
+                except: continue
+
             # 3. 직접 번호 선택기가 화면에 보인다면 즉시 반환
             if page.query_selector("label[for^='check645num']"):
                 logger.info("    [OK] 메인 화면에서 선택기 발견")
@@ -475,7 +503,7 @@ def find_game_frame(page):
         time.sleep(0.5)
     
     logger.warning("    [WARNING] 보안 프레임을 찾지 못해 메인 프레임을 강제로 할당합니다.")
-    return page.main_frame  # 끝내 못 찾으면 메인 프레임에서 시도하게끔 폴백 적용
+    return page.main_frame
 
 
 # ─────────────────────────────────────────────────────────
@@ -528,8 +556,9 @@ def select_number(frame, num):
 # ─────────────────────────────────────────────────────────
 #  구매 메인 함수
 # ─────────────────────────────────────────────────────────
-def do_purchase(page, numbers):
+def do_purchase(page, numbers, user_id=""):
     logger.info("[PURCHASE] === 구매 엔진 시작 ===")
+    update_status(user_id, "구매 엔진 가동! 페이지 이동 대기...")
 
     dialog_msgs = []
 
@@ -583,25 +612,37 @@ def do_purchase(page, numbers):
 
         frame = find_game_frame(page)
         if not frame:
+            # 타겟 프레임이 안 보이면 현재 페이지 전체 텍스트 로깅 (디버깅)
+            logger.error("  [FAIL] 타겟 프레임을 찾을 수 없음. 현재 페이지 구조 분석 중...")
+            try:
+                page_text = page.evaluate("() => document.body.innerText.substring(0, 500)")
+                logger.error(f"  페이지 텍스트: {page_text!r}")
+            except: pass
+            
             cur_url = page.url
-            page_text = page.evaluate("() => document.body.innerText.substring(0, 300)")
-            logger.error(f"  [FAIL] 타겟 프레임을 찾을 수 없음. URL: {cur_url}, 내용: {page_text}")
-            
             if "login" in cur_url.lower(): return False, "로그인 세션이 만료되었습니다. 다시 로그인해 주세요."
-            if "점검" in page_text: return False, "동행복권 사이트 점검 시간입니다."
-            if "간소화" in page_text or "접속이 폭주" in page_text: return False, "동행복권 사이트가 현재 간소화 모드로 운영 중이어서 구매가 지연되고 있습니다."
-            
-            return False, "금융 거래용 보안 프레임을 찾지 못했습니다. 잠시 후 동기화 버튼을 다시 눌러주세요."
-        logger.info(f"    iframe: {frame.url}")
+            return False, "금융 거래용 보안 프레임을 찾지 못했습니다. 잠시 후 다시 시도해 주세요."
+        
+        logger.info(f"    Target Frame Identified: {frame.url[:60]}...")
+
+        # STEP 2-Bonus: iframe 내 방해 요소 제거 (프레임 내부에서도 실행)
+        try:
+            frame.evaluate("""() => {
+                document.querySelectorAll('input[value="닫기"],.close,.popup-close, #popupLayerConfirm.none')
+                    .forEach(el => { try { el.click(); } catch(e){} });
+            }""")
+        except: pass
 
         try:
-            frame.wait_for_load_state("domcontentloaded", timeout=8000)
+            frame.wait_for_load_state("networkidle", timeout=10000)
         except:
-            pass
-        time.sleep(0.5)
+            try: frame.wait_for_load_state("domcontentloaded", timeout=5000)
+            except: pass
+        time.sleep(1.0)
 
         # STEP 3: 게임 UI 확인 (label 존재 여부)
         logger.info("  [3/7] 번호 선택 UI 확인...")
+        update_status(user_id, "번호 선택 UI 로딩 확인 중...")
         ui_loaded = False
         for attempt in range(20):
             try:
@@ -617,12 +658,26 @@ def do_purchase(page, numbers):
             time.sleep(0.5)
 
         if not ui_loaded:
+            # 마지막 수단: 프레임 새로고침 시도 (옵션)
+            logger.warning("  [RETRY] UI 로드 실패. 프레임 URL 다시 접근 중...")
+            try:
+                frame.goto("https://ol.dhlottery.co.kr/olotto/game/game645.do", wait_until="networkidle", timeout=20000)
+                time.sleep(3.0)
+                # 재확인
+                label_count = frame.evaluate("() => document.querySelectorAll('label[for^=\"check645num\"]').length")
+                if label_count > 0:
+                    ui_loaded = True
+                    logger.info(f"    [OK] 재시도 후 UI 확인 완료 (label 수: {label_count})")
+            except Exception as e:
+                logger.error(f"  재시도 실패: {e}")
+
+        if not ui_loaded:
             try:
                 txt = frame.evaluate("() => document.body.innerText.substring(0, 200)")
-                logger.error(f"  iframe 내용: {txt!r}")
-            except:
-                pass
-            return False, "번호 선택 UI 로드 실패 (구매 시간: 월~토 06:00 ~ 토 20:00)"
+                logger.error(f"  iframe 최종 내용: {txt!r}")
+                if "로그인" in txt: return False, "구매 페이지 로그인 인증에 실패했습니다."
+            except: pass
+            return False, "번호 선택 UI 로드 실패. 사이트 연결이 원활하지 않습니다."
 
         # STEP 4: 혼합선택 탭 활성화
         logger.info("  [4/7] '혼합선택' 탭 활성화 시도...")
@@ -648,6 +703,7 @@ def do_purchase(page, numbers):
         time.sleep(0.5)
 
         # STEP 5: 번호 6개 선택
+        update_status(user_id, f"선택된 번호 입력 중: {numbers}")
         logger.info(f"  [5/7] 번호 선택: {numbers}")
         fail_count = 0
         for num in numbers:
@@ -672,6 +728,7 @@ def do_purchase(page, numbers):
         time.sleep(0.3)
 
         # STEP 6: 선택완료(확인) 클릭
+        update_status(user_id, "선택완료 버튼 클릭...")
         logger.info("  [6/7] '선택완료' 클릭...")
         step6_ok = False
         try:
@@ -702,6 +759,7 @@ def do_purchase(page, numbers):
                 return False, f"구매 불가: {last}"
 
         # STEP 7: 구매하기 클릭 (frame 내 #btnBuy만)
+        update_status(user_id, "최종 구매하기 버튼 클릭...")
         logger.info("  [7/7] '구매하기' 클릭...")
         step7_ok = False
         try:
@@ -726,6 +784,7 @@ def do_purchase(page, numbers):
         time.sleep(1.5)
 
         # STEP 8: 구매 확인 팝업(레이어) 처리
+        update_status(user_id, "구매 확정 팝업 승인 중...")
         logger.info("  [8/7] 구매 확정 진행 중 (팝업 레이어 승인)...")
         for _ in range(5):
             clicked_any = False
@@ -765,6 +824,7 @@ def do_purchase(page, numbers):
         time.sleep(2.0)
 
         # 최종 결과 판정
+        update_status(user_id, "구매 결과 확인 중...")
         logger.info("  === 결과 판정 ===")
         logger.info(f"  dialog_msgs: {dialog_msgs}")
 
@@ -1053,8 +1113,11 @@ def do_sync_history(page, user_id):
 #  구매 자동화 진입점
 # ─────────────────────────────────────────────────────────
 def automate_purchase(user_id, user_pw, numbers):
+    update_status(user_id, "브라우저 엔진 시작 중...")
     with sync_playwright() as p:
         is_cloud = os.environ.get('RENDER') or os.environ.get('PORT') or os.environ.get('DYNO')
+        update_status(user_id, f"서버 환경 분석: {'클라우드' if is_cloud else '로컬'}")
+        
         browser = p.chromium.launch(
             headless=bool(is_cloud),
             args=[
@@ -1082,12 +1145,14 @@ def automate_purchase(user_id, user_pw, numbers):
         if HAS_STEALTH:
             Stealth().apply_stealth_sync(page)
         try:
-            logger.info("=== 로그인 시도 중 ===")
+            update_status(user_id, "로그인 인증 시도 중...")
             if do_login(page, user_id, user_pw):
-                logger.info("=== 로그인 성공 → 구매 진행 ===")
-                return do_purchase(page, numbers)
+                update_status(user_id, "로그인 인증 성공! 구매 화면으로 진입...")
+                return do_purchase(page, numbers, user_id)
+            update_status(user_id, "로그인 실패: 아이디/비번을 확인해 주세요.")
             return False, "로그인 실패"
         except Exception as e:
+            update_status(user_id, f"엔진 오류: {str(e)[:50]}")
             return False, str(e)
         finally:
             browser.close()
@@ -1099,6 +1164,15 @@ def automate_purchase(user_id, user_pw, numbers):
 @app.route('/')
 def index():
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), 'lotto_ai.html')
+
+
+@app.route('/purchase_status')
+def get_purchase_status_endpoint():
+    uid = request.args.get('id', '').lower().strip()
+    if not uid:
+        return jsonify({"status": "알 수 없음", "logs": []})
+    status = PURCHASE_STATUS.get(uid, {"status": "진행 전", "logs": ["기록된 데이터가 없습니다."]})
+    return jsonify(status)
 
 
 @app.route('/health')
