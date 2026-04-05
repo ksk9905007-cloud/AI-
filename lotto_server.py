@@ -602,17 +602,27 @@ def do_purchase(page, numbers):
             return False, "번호 선택 UI 로드 실패 (구매 시간: 월~토 06:00 ~ 토 20:00)"
 
         # STEP 4: 혼합선택 탭 활성화
-        logger.info("  [4/7] 번호 입력 탭 활성화...")
-        try:
-            frame.evaluate("""() => {
-                for (let el of document.querySelectorAll('a,button,li,label,span,div')) {
-                    const t = (el.innerText||el.textContent||'').replace(/\\s/g,'');
-                    if (t === '혼합선택' || t === '번호직접선택') { el.click(); return t; }
-                }
-            }""")
-        except:
-            pass
-        time.sleep(0.3)
+        logger.info("  [4/7] '혼합선택' 탭 활성화 시도...")
+        tab_ok = False
+        for _ in range(5):
+            try:
+                tab_ok = frame.evaluate("""() => {
+                    const els = [...document.querySelectorAll('a, button, li, label, span, div')];
+                    for (let el of els) {
+                        const t = (el.innerText || el.textContent || '').replace(/\s/g, '');
+                        if (t.includes('혼합선택') || t.includes('번호직접선택')) {
+                            el.click(); return true;
+                        }
+                    }
+                    return false;
+                }""")
+                if tab_ok: break
+            except: pass
+            time.sleep(0.5)
+        
+        if not tab_ok:
+            logger.warning("    탭 활성화 요소를 찾지 못해 기본 모드로 진행합니다.")
+        time.sleep(0.5)
 
         # STEP 5: 번호 6개 선택
         logger.info(f"  [5/7] 번호 선택: {numbers}")
@@ -692,21 +702,43 @@ def do_purchase(page, numbers):
         logger.info("    구매하기 완료")
         time.sleep(1.5)
 
-        # 구매 확인 팝업 처리
-        for ctx in [page, frame]:
-            try:
-                ctx.evaluate("""() => {
-                    const sels = ['#popupLayerConfirm .button_ok',
-                        '#popupLayerConfirm input[value="확인"]',
-                        '#popupLayerConfirm a', '#popupLayerConfirm button',
-                        '.btn_confirm', '.button_ok'];
-                    for (let sel of sels) {
-                        const el = document.querySelector(sel);
-                        if (el && el.offsetParent !== null) { el.click(); return sel; }
-                    }
-                }""")
-            except:
-                pass
+        # STEP 8: 구매 확인 팝업(레이어) 처리
+        logger.info("  [8/7] 구매 확정 진행 중 (팝업 레이어 승인)...")
+        for _ in range(5):
+            clicked_any = False
+            for ctx in [page, frame]:
+                try:
+                    result = ctx.evaluate("""() => {
+                        // 1. 확인 버튼 명시적 탐색
+                        const btns = [...document.querySelectorAll('a, button, input[type="button"], input[type="submit"]')];
+                        const okBtn = btns.find(b => {
+                            const t = (b.innerText || b.value || "").replace(/\s/g, "");
+                            return t === "확인" || t === "구매" || t === "결제결정";
+                        });
+                        
+                        if (okBtn && okBtn.offsetParent !== null) {
+                            okBtn.click();
+                            return "ok_clicked";
+                        }
+                        
+                        // 2. ID 기반 레이어 탐색
+                        const layer = document.getElementById('popupLayerConfirm');
+                        if (layer && layer.style.display !== 'none') {
+                            const layerOk = layer.querySelector('.btn_confirm, .button_ok, input[value="확인"], a, button');
+                            if (layerOk) { layerOk.click(); return "layer_ok_clicked"; }
+                        }
+                        return null;
+                    }""")
+                    if result:
+                        logger.info(f"    결과: {result}")
+                        clicked_any = True
+                except:
+                    pass
+            if clicked_any:
+                time.sleep(1.0)
+                break
+            time.sleep(0.8)
+            
         time.sleep(2.0)
 
         # 최종 결과 판정
