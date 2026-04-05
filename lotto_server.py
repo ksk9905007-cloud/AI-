@@ -338,7 +338,18 @@ LOGIN_URLS = [
 
 
 def do_login(page, user_id, user_pw):
-    """동행복권 로그인 (간소화/일반 모드 자동 대응)"""
+    """동행복권 로그인 (실패 원인 분석 포함)"""
+    login_fail_msg = "아이디 또는 비밀번호를 다시 확인해 주세요."
+    
+    def handle_login_dialog(dialog):
+        nonlocal login_fail_msg
+        msg = dialog.message
+        logger.warning(f"  [LOGIN DIALOG] {msg}")
+        login_fail_msg = msg
+        dialog.accept()
+
+    page.on("dialog", handle_login_dialog)
+
     for login_url in LOGIN_URLS:
         try:
             update_status(user_id, f"로그인 페이지({login_url}) 접속 중...")
@@ -349,7 +360,7 @@ def do_login(page, user_id, user_pw):
             if "errorPage" in page.url or "error" in page.url.lower():
                 continue
 
-            # 셀렉터 정의
+            # 셀렉터 정의 (최적화된 방식 유지)
             id_selectors = ["#inpUserId", "#userId", "input[name='userId']", "input[name='inpUserId']"]
             pw_selectors = ["#inpUserPswdEncn", "#userPswdEncn", "input[name='userPswdEncn']", "input[name='inpUserPswdEncn']"]
             btn_selectors = ["#btnLogin", ".login-btn", ".item-submit", "button[type='submit']", "input[type='submit']"]
@@ -369,44 +380,55 @@ def do_login(page, user_id, user_pw):
             if not id_el or not pw_el or not btn_el:
                 continue
 
-            # 입력 (보안 JS 대응)
+            # 입력 지연 시간을 조금 더 주어 안정성 확보
             id_el.click()
             id_el.fill("")
-            id_el.type(user_id, delay=35)
+            id_el.type(user_id, delay=40)
             
             pw_el.click()
             pw_el.fill("")
-            pw_el.type(user_pw, delay=45)
+            pw_el.type(user_pw, delay=50)
             
-            # 사이트 암호화 로직 보완
+            # 사이트 암호화 로직 및 hidden 매칭
             page.evaluate("""(args) => {
                 const [uid, upw] = args;
                 const hId = document.getElementById('userId');
                 if (hId && hId.type === 'hidden') hId.value = uid;
+                
+                const hPw = document.getElementById('userPswdEncn');
+                if (hPw && hPw.type === 'hidden' && hPw.value === '') hPw.value = upw;
             }""", [user_id, user_pw])
             
             time.sleep(1.0)
             btn_el.click(force=True)
 
-            # 결과 대기 및 확인
-            try: page.wait_for_load_state("load", timeout=20000)
+            # 결과 대기
+            try: page.wait_for_load_state("load", timeout=15000)
             except: pass
             
             time.sleep(2.0)
             
-            for _ in range(15):
+            # 성공 판정
+            for _ in range(12):
                 if is_logged_in(page):
-                    return True
-                if "login" not in page.url.lower() and "error" not in page.url.lower():
-                    if "마이" in page.content() or "my" in page.content().lower():
-                        return True
+                    page.remove_listener("dialog", handle_login_dialog)
+                    return True, "성공"
+                
+                # URL 기반 비로그인 상태 확인
+                if "login" in page.url or "error" in page.url:
+                    # 실패 시 나타나는 텍스트 확인
+                    fail_txt = page.evaluate("() => document.body.innerText.substring(0, 500)")
+                    if "비밀번호" in fail_txt or "맞지 않" in fail_txt or "불일치" in fail_txt:
+                        login_fail_msg = "아이디/비밀번호가 일치하지 않습니다."
+                
                 time.sleep(0.5)
 
         except Exception as e:
             logger.error(f"Login attempt error: {e}")
             continue
 
-    return False
+    page.remove_listener("dialog", handle_login_dialog)
+    return False, login_fail_msg
 
 
 # ─────────────────────────────────────────────────────────
@@ -1063,25 +1085,28 @@ def automate_purchase(user_id, user_pw, numbers):
         )
         page = context.new_page()
         
-        # [OPTIMIZATION] 이미지 및 배너 차단으로 로딩 속도 2배 향상
-        def block_aggressively(route):
-            if route.request.resource_type in ["image", "font", "media"]:
-                route.abort()
-            elif "google-analytics" in route.request.url or "googletagmanager" in route.request.url:
-                route.abort()
-            else:
-                route.continue_()
-        page.route("**/*", block_aggressively)
-
         if HAS_STEALTH:
             Stealth().apply_stealth_sync(page)
         try:
             update_status(user_id, "로그인 인증 시도 중...")
-            if do_login(page, user_id, user_pw):
+            success, login_msg = do_login(page, user_id, user_pw)
+            if success:
                 update_status(user_id, "로그인 인증 성공! 구매 화면으로 진입...")
+                # 구매 단계에서 속도를 위해 리소스 차단 적용
+                def block_aggressively(route):
+                    if route.request.resource_type in ["image", "font", "media"]:
+                        route.abort()
+                    elif "google-analytics" in route.request.url or "googletagmanager" in route.request.url:
+                        route.abort()
+                    else:
+                        route.continue_()
+                page.route("**/*", block_aggressively)
+                
                 return do_purchase(page, numbers, user_id)
-            update_status(user_id, "로그인 실패: 아이디/비번을 확인해 주세요.")
-            return False, "로그인 실패"
+            
+            error_msg = f"로그인 실패: {login_msg}"
+            update_status(user_id, error_msg)
+            return False, error_msg
         except Exception as e:
             update_status(user_id, f"엔진 오류: {str(e)[:50]}")
             return False, str(e)
