@@ -338,97 +338,141 @@ LOGIN_URLS = [
 
 
 def do_login(page, user_id, user_pw):
-    """동행복권 로그인 (실패 원인 분석 포함)"""
-    login_fail_msg = "아이디 또는 비밀번호를 다시 확인해 주세요."
-    
-    def handle_login_dialog(dialog):
-        nonlocal login_fail_msg
-        msg = dialog.message
-        logger.warning(f"  [LOGIN DIALOG] {msg}")
-        login_fail_msg = msg
-        dialog.accept()
-
-    page.on("dialog", handle_login_dialog)
-
+    """동행복권 로그인 (간소화/일반 모드 자동 대응)"""
     for login_url in LOGIN_URLS:
         try:
             update_status(user_id, f"로그인 페이지({login_url}) 접속 중...")
-            page.goto(login_url, wait_until="load", timeout=30000)
-            time.sleep(1.0)
+            page.goto(login_url, wait_until="networkidle", timeout=30000)
+            time.sleep(1.5)
 
-            # 에러 페이지 체크
-            if "errorPage" in page.url or "error" in page.url.lower():
+            # 현재 URL이 에러 페이지로 리다이렉트 되었는지 확인
+            cur_url = page.url
+            if "errorPage" in cur_url or "error" in cur_url.lower():
+                logger.warning(f"  [LOGIN] 에러 페이지로 리다이렉트됨: {cur_url}")
                 continue
 
-            # 셀렉터 정의 (최적화된 방식 유지)
+            # 로그인 폼 존재 여부 확인 (다양한 셀렉터 시도)
+            id_field = None
+            pw_field = None
+            login_btn = None
+
+            # 셀렉터 조합들
             id_selectors = ["#inpUserId", "#userId", "input[name='userId']", "input[name='inpUserId']"]
             pw_selectors = ["#inpUserPswdEncn", "#userPswdEncn", "input[name='userPswdEncn']", "input[name='inpUserPswdEncn']"]
             btn_selectors = ["#btnLogin", ".login-btn", ".item-submit", "button[type='submit']", "input[type='submit']"]
 
-            combined_id = ",".join(id_selectors)
-            combined_pw = ",".join(pw_selectors)
-            combined_btn = ",".join(btn_selectors)
+            for sel in id_selectors:
+                try:
+                    el = page.wait_for_selector(sel, timeout=3000)
+                    if el:
+                        id_field = sel
+                        break
+                except:
+                    continue
 
-            try:
-                page.wait_for_selector(combined_id, timeout=10000)
-                id_el = page.query_selector(combined_id)
-                pw_el = page.query_selector(combined_pw)
-                btn_el = page.query_selector(combined_btn)
-            except:
+            for sel in pw_selectors:
+                try:
+                    el = page.query_selector(sel)
+                    if el:
+                        pw_field = sel
+                        break
+                except:
+                    continue
+
+            for sel in btn_selectors:
+                try:
+                    el = page.query_selector(sel)
+                    if el:
+                        login_btn = sel
+                        break
+                except:
+                    continue
+
+            if not id_field or not pw_field or not login_btn:
+                logger.warning(f"  [LOGIN] 로그인 폼 요소 찾기 실패 (id={id_field}, pw={pw_field}, btn={login_btn})")
                 continue
 
-            if not id_el or not pw_el or not btn_el:
-                continue
+            logger.info(f"  [LOGIN] 폼 요소 발견: id={id_field}, pw={pw_field}, btn={login_btn}")
 
-            # 입력 지연 시간을 조금 더 주어 안정성 확보
-            id_el.click()
-            id_el.fill("")
-            id_el.type(user_id, delay=40)
-            
-            pw_el.click()
-            pw_el.fill("")
-            pw_el.type(user_pw, delay=50)
-            
-            # 사이트 암호화 로직 및 hidden 매칭
+            # 아이디 입력
+            page.fill(id_field, "")
+            page.type(id_field, user_id, delay=50)
+            time.sleep(0.3)
+
+            # 비밀번호 입력 (type으로 한 글자씩 입력하여 사이트 JS 이벤트 트리거)
+            page.fill(pw_field, "")
+            page.type(pw_field, user_pw, delay=50)
+            time.sleep(0.5)
+
+            # 사이트의 JS가 hidden 필드에 암호화된 비밀번호를 세팅할 시간 확보
+            # 일부 사이트에서 hidden 필드(userId, userPswdEncn)에 값을 복사하는 로직이 있음
             page.evaluate("""(args) => {
                 const [uid, upw] = args;
-                const hId = document.getElementById('userId');
-                if (hId && hId.type === 'hidden') hId.value = uid;
-                
-                const hPw = document.getElementById('userPswdEncn');
-                if (hPw && hPw.type === 'hidden' && hPw.value === '') hPw.value = upw;
+                // hidden userId 필드에 값 세팅
+                const hiddenId = document.getElementById('userId');
+                if (hiddenId && hiddenId.type === 'hidden') {
+                    hiddenId.value = uid;
+                }
             }""", [user_id, user_pw])
-            
-            time.sleep(1.0)
-            btn_el.click(force=True)
+            time.sleep(0.5)
 
-            # 결과 대기
-            try: page.wait_for_load_state("load", timeout=15000)
-            except: pass
-            
+            # 로그인 버튼 클릭 (확인 가능할 때까지 대기)
+            logger.info("  [LOGIN] 로그인 버튼 클릭...")
+            page.click(login_btn)
+
+            # 페이지 로딩 대기 (Cloud 환경 고려하여 최대 25초 대기)
+            try:
+                page.wait_for_load_state("networkidle", timeout=25000)
+            except:
+                pass
             time.sleep(2.0)
-            
-            # 성공 판정
-            for _ in range(12):
+
+            # 로그인 성공 확인 (여러 방법으로 판단)
+            for attempt in range(20):
+                # 방법 1: 페이지 내용에서 로그아웃 버튼/텍스트 존재 확인
                 if is_logged_in(page):
-                    page.remove_listener("dialog", handle_login_dialog)
-                    return True, "성공"
-                
-                # URL 기반 비로그인 상태 확인
-                if "login" in page.url or "error" in page.url:
-                    # 실패 시 나타나는 텍스트 확인
-                    fail_txt = page.evaluate("() => document.body.innerText.substring(0, 500)")
-                    if "비밀번호" in fail_txt or "맞지 않" in fail_txt or "불일치" in fail_txt:
-                        login_fail_msg = "아이디/비밀번호가 일치하지 않습니다."
-                
+                    update_status(user_id, "로그인 완료! 마이페이지 확인 중...")
+                    logger.info("  [LOGIN] ✅ 로그인 성공!")
+                    return True
+
+                # 방법 2: URL 변화 확인 (로그인 후 메인/마이페이지로 이동)
+                cur = page.url
+                if "login" not in cur.lower() and "error" not in cur.lower():
+                    # 로그인 페이지를 벗어났으면 성공 가능성 높음
+                    content = page.content()
+                    if user_id.lower() in content.lower() or "마이" in content or "my" in content.lower():
+                        logger.info(f"  [LOGIN] ✅ 로그인 성공 (URL 변화 감지: {cur})")
+                        return True
+
+                # 방법 3: 쿠키 확인 (JSESSIONID 등)
+                cookies = page.context.cookies()
+                session_cookies = [c for c in cookies if 'session' in c['name'].lower() or 'JSESSIONID' in c['name']]
+                if session_cookies and attempt > 3:
+                    # 세션 쿠키가 존재하고 로그인 페이지를 벗어났다면
+                    if "login" not in page.url.lower():
+                        logger.info(f"  [LOGIN] ✅ 로그인 성공 (세션 쿠키 감지)")
+                        return True
+
                 time.sleep(0.5)
 
+            # 로그인 실패 원인 파악
+            fail_content = page.evaluate("() => document.body.innerText.substring(0, 300)")
+            logger.error(f"  [LOGIN] ❌ 로그인 실패. 페이지 내용: {fail_content}")
+
+            # 에러 메시지 확인 (비밀번호 틀림 등)
+            error_msg = page.evaluate("""() => {
+                const alerts = document.querySelectorAll('.alert, .error, .err-msg, .login-error');
+                return Array.from(alerts).map(a => a.innerText).join(' ');
+            }""")
+            if error_msg:
+                logger.error(f"  [LOGIN] 에러 메시지: {error_msg}")
+
         except Exception as e:
-            logger.error(f"Login attempt error: {e}")
+            logger.error(f"  [LOGIN] {login_url} 시도 중 오류: {e}")
             continue
 
-    page.remove_listener("dialog", handle_login_dialog)
-    return False, login_fail_msg
+    logger.error("  [LOGIN] 모든 로그인 시도 실패")
+    return False
 
 
 # ─────────────────────────────────────────────────────────
@@ -530,15 +574,20 @@ def do_purchase(page, numbers, user_id=""):
     page.on("dialog", handle_dialog)
 
     try:
-        # STEP 1: 구매 페이지 직접 이동 (최적화)
-        logger.info("  [1/7] 구매 페이지 직접 진입...")
+        # STEP 1: 구매 페이지 이동
+        logger.info("  [1/7] 구매 페이지(game645.do) 이동...")
+        # 직접 이동 전 메인 페이지를 한 번 거쳐 쿠키/Referer 유지
         try:
-            # networkidle 대신 domcontentloaded + 수동 대기로 시간 단축
-            page.goto("https://ol.dhlottery.co.kr/olotto/game/game645.do", wait_until="domcontentloaded", timeout=25000)
-        except:
-            page.goto("https://ol.dhlottery.co.kr/olotto/game/game645.do", wait_until="load", timeout=15000)
+            page.goto("https://dhlottery.co.kr/common.do?method=main", wait_until="load", timeout=15000)
+            time.sleep(1.0)
+        except: pass
         
-        time.sleep(1.0)
+        try:
+            page.goto("https://ol.dhlottery.co.kr/olotto/game/game645.do", wait_until="networkidle", timeout=30000)
+        except:
+            try: page.goto("https://ol.dhlottery.co.kr/olotto/game/game645.do", wait_until="load", timeout=20000)
+            except: pass
+        time.sleep(2.0)
 
         try:
             page.evaluate("""() => {
@@ -589,16 +638,17 @@ def do_purchase(page, numbers, user_id=""):
         except: pass
 
         try:
-            # networkidle 대신 domcontentloaded 대기 후 즉시 상호작용 시도
-            frame.wait_for_load_state("domcontentloaded", timeout=10000)
-        except: pass
-        time.sleep(0.3)
+            frame.wait_for_load_state("networkidle", timeout=10000)
+        except:
+            try: frame.wait_for_load_state("domcontentloaded", timeout=5000)
+            except: pass
+        time.sleep(1.0)
 
         # STEP 3: 게임 UI 확인 (label 존재 여부)
         logger.info("  [3/7] 번호 선택 UI 확인...")
         update_status(user_id, "번호 선택 UI 로딩 확인 중...")
         ui_loaded = False
-        for attempt in range(15):
+        for attempt in range(20):
             try:
                 label_count = frame.evaluate("""() =>
                     document.querySelectorAll('label[for^="check645num"]').length
@@ -609,7 +659,7 @@ def do_purchase(page, numbers, user_id=""):
                     break
             except:
                 pass
-            time.sleep(0.3)
+            time.sleep(0.5)
 
         if not ui_loaded:
             # 마지막 수단: 프레임 새로고침 시도 (옵션)
@@ -656,57 +706,55 @@ def do_purchase(page, numbers, user_id=""):
             logger.warning("    탭 활성화 요소를 찾지 못해 기본 모드로 진행합니다.")
         time.sleep(0.5)
 
-        # STEP 5: 번호 6개 원샷 선택 (초고속 모드)
-        update_status(user_id, f"선택된 번호 번개 입력 중: {numbers}")
-        logger.info(f"  [5/7] 번호 광속 선택: {numbers}")
-        
+        # STEP 5: 번호 6개 선택
+        update_status(user_id, f"선택된 번호 입력 중: {numbers}")
+        logger.info(f"  [5/7] 번호 선택: {numbers}")
+        fail_count = 0
+        for num in numbers:
+            ok = select_number(frame, num)
+            logger.info(f"    {num:02d} {'✅' if ok else '❌'}")
+            if not ok:
+                fail_count += 1
+            time.sleep(0.08)
+
+        # 실제 체크된 수 검증
         try:
-            checked_count = frame.evaluate(f"""(nums) => {{
-                let success = 0;
-                nums.forEach(n => {{
-                    const lbl = document.querySelector('label[for="check645num' + n + '"]');
-                    const inp = document.getElementById('check645num' + n);
-                    if (lbl) {{ lbl.click(); success++; }}
-                    else if (inp) {{ inp.checked = true; success++; }}
-                }});
-                return success;
-            }}""", numbers)
-            logger.info(f"    선택 완료: {checked_count}/6")
-        except Exception as e:
-            logger.error(f"    번호 선택 엔진 오류: {e}")
-            # 폴백: 개별 선택 시도
-            for num in numbers:
-                select_number(frame, num)
-                time.sleep(0.05)
+            checked = frame.evaluate("""() =>
+                document.querySelectorAll('input[id^="check645num"]:checked').length
+            """)
+            logger.info(f"    체크된 번호 수: {checked}/6")
+        except:
+            checked = 6 - fail_count
 
         if fail_count >= 3:
             return False, f"번호 선택 다수 실패 ({fail_count}/6 실패)"
 
         time.sleep(0.3)
 
-        # STEP 6: 선택완료(확인) 클릭 - 광속 처리
-        update_status(user_id, "선택완료 광속 클릭...")
+        # STEP 6: 선택완료(확인) 클릭
+        update_status(user_id, "선택완료 버튼 클릭...")
         logger.info("  [6/7] '선택완료' 클릭...")
-        step6_ok = frame.evaluate("""() => {
-            const btn = document.getElementById('btnSelectNum');
-            if (btn) {
-                btn.click();
-                btn.dispatchEvent(new Event('change', {bubbles: true}));
-                return true;
-            }
-            return false;
-        }""")
-        
+        step6_ok = False
+        try:
+            r = frame.evaluate("""() => {
+                const btn = document.getElementById('btnSelectNum');
+                if (btn) { btn.click(); return 'ok'; }
+                return null;
+            }""")
+            if r:
+                step6_ok = True
+        except:
+            pass
         if not step6_ok:
             try:
-                frame.locator("#btnSelectNum").click(force=True, timeout=1000)
+                frame.locator("#btnSelectNum").click(force=True, timeout=2000)
                 step6_ok = True
-            except: pass
-            
+            except:
+                pass
         if not step6_ok:
             return False, "[6/7] '선택완료' 버튼 클릭 실패"
-        
-        time.sleep(0.4)
+        logger.info("    선택완료 완료")
+        time.sleep(0.8)
 
         # 잔액/한도 에러 감지
         if dialog_msgs:
@@ -737,7 +785,7 @@ def do_purchase(page, numbers, user_id=""):
         if not step7_ok:
             return False, "[7/7] '구매하기' 버튼 클릭 실패"
         logger.info("    구매하기 완료")
-        time.sleep(1.0)
+        time.sleep(1.5)
 
         # STEP 8: 구매 확인 팝업(레이어) 처리
         update_status(user_id, "구매 확정 팝업 승인 중...")
@@ -747,30 +795,44 @@ def do_purchase(page, numbers, user_id=""):
             for ctx in [page, frame]:
                 try:
                     result = ctx.evaluate("""() => {
+                        // 1. 확인 버튼 명시적 탐색
                         const btns = [...document.querySelectorAll('a, button, input[type="button"], input[type="submit"]')];
                         const okBtn = btns.find(b => {
                             const t = (b.innerText || b.value || "").replace(/\s/g, "");
                             return t === "확인" || t === "구매" || t === "결제결정";
                         });
+                        
                         if (okBtn && okBtn.offsetParent !== null) {
                             okBtn.click();
                             return "ok_clicked";
                         }
+                        
+                        // 2. ID 기반 레이어 탐색
+                        const layer = document.getElementById('popupLayerConfirm');
+                        if (layer && layer.style.display !== 'none') {
+                            const layerOk = layer.querySelector('.btn_confirm, .button_ok, input[value="확인"], a, button');
+                            if (layerOk) { layerOk.click(); return "layer_ok_clicked"; }
+                        }
+                        return null;
                     }""")
-                    if result: clicked_any = True
-                except: pass
+                    if result:
+                        logger.info(f"    결과: {result}")
+                        clicked_any = True
+                except:
+                    pass
             if clicked_any:
-                time.sleep(0.5)
+                time.sleep(1.0)
                 break
-            time.sleep(0.5)
+            time.sleep(0.8)
             
-        time.sleep(1.0)
+        time.sleep(2.0)
 
         # 최종 결과 판정
         update_status(user_id, "구매 결과 확인 중...")
         logger.info("  === 결과 판정 ===")
+        logger.info(f"  dialog_msgs: {dialog_msgs}")
 
-        # 1) dialog 메시지에서 성공/실패 판정 (가장 빠름)
+        # 1) dialog 메시지에서 성공/실패 판정
         for msg in reversed(dialog_msgs):
             if any(k in msg for k in ["완료", "성공", "발행", "구매하셨", "정상"]):
                 return True, f"구매 완료: {msg}"
@@ -1084,29 +1146,15 @@ def automate_purchase(user_id, user_pw, numbers):
             }
         )
         page = context.new_page()
-        
         if HAS_STEALTH:
             Stealth().apply_stealth_sync(page)
         try:
             update_status(user_id, "로그인 인증 시도 중...")
-            success, login_msg = do_login(page, user_id, user_pw)
-            if success:
+            if do_login(page, user_id, user_pw):
                 update_status(user_id, "로그인 인증 성공! 구매 화면으로 진입...")
-                # 구매 단계에서 속도를 위해 리소스 차단 적용
-                def block_aggressively(route):
-                    if route.request.resource_type in ["image", "font", "media"]:
-                        route.abort()
-                    elif "google-analytics" in route.request.url or "googletagmanager" in route.request.url:
-                        route.abort()
-                    else:
-                        route.continue_()
-                page.route("**/*", block_aggressively)
-                
                 return do_purchase(page, numbers, user_id)
-            
-            error_msg = f"로그인 실패: {login_msg}"
-            update_status(user_id, error_msg)
-            return False, error_msg
+            update_status(user_id, "로그인 실패: 아이디/비번을 확인해 주세요.")
+            return False, "로그인 실패"
         except Exception as e:
             update_status(user_id, f"엔진 오류: {str(e)[:50]}")
             return False, str(e)
