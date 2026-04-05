@@ -442,24 +442,28 @@ def do_login(page, user_id, user_pw):
 #  iframe 탐색
 # ─────────────────────────────────────────────────────────
 def find_game_frame(page):
-    for _ in range(25):
+    for _ in range(30):
         try:
             # 1. URL이나 name에 game645가 포함된 프레임 탐색
             for f in page.frames:
                 if "game645" in f.url.lower() or "game645" in f.name.lower():
+                    logger.info(f"    [OK] 프레임 발견 (URL: {f.url})")
                     return f
-            # 2. 동행복권의 핵심 iframe 이름인 ifrm_lotto645 연동
+            # 2. 동행복권 핵심 iframe 이름 (ifrm_lotto645)
             for f in page.frames:
                 if "ifrm_lotto645" in f.name.lower() or "lotto645" in f.url.lower():
+                    logger.info(f"    [OK] ifrm 명칭 프레임 발견")
                     return f
-            
-            # 3. 만약 위에서 못 찾았는데, 메인 페이지에 직접 번호 선택(check645num) 요소가 있다면 메인 프레임 반환
+            # 3. 직접 번호 선택기가 화면에 보인다면 즉시 반환
             if page.query_selector("label[for^='check645num']"):
+                logger.info("    [OK] 메인 화면에서 선택기 발견")
                 return page.main_frame
         except:
             pass
         time.sleep(0.5)
-    return None
+    
+    logger.warning("    [WARNING] 보안 프레임을 찾지 못해 메인 프레임을 강제로 할당합니다.")
+    return page.main_frame  # 끝내 못 찾으면 메인 프레임에서 시도하게끔 폴백 적용
 
 
 # ─────────────────────────────────────────────────────────
@@ -525,12 +529,14 @@ def do_purchase(page, numbers):
     page.on("dialog", handle_dialog)
 
     try:
-        # STEP 1: 구매 페이지 접속
-        logger.info("  [1/7] 구매 페이지 접속 중...")
-        page.goto(
-            "https://el.dhlottery.co.kr/game/TotalGame.jsp?LottoId=LO40",
-            wait_until="networkidle", timeout=30000
-        )
+        # STEP 1: 구매 페이지 이동
+        logger.info("  [1/7] 구매 페이지(game645.do) 이동...")
+        # 직접 이동 전 메인 페이지를 한 번 거쳐 쿠키/Referer 유지
+        try:
+            page.goto("https://dhlottery.co.kr/common.do?method=main", timeout=10000)
+        except: pass
+        
+        page.goto("https://ol.dhlottery.co.kr/olotto/game/game645.do", wait_until="domcontentloaded", timeout=30000)
         time.sleep(1.0)
 
         try:
