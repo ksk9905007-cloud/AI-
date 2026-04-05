@@ -109,9 +109,21 @@ def get_lotto_info_by_no(draw_no):
         with sync_playwright() as p:
             browser = p.chromium.launch(
                 headless=bool(is_cloud),
-                args=["--no-sandbox", "--disable-blink-features=AutomationControlled", "--disable-dev-shm-usage"]
+                args=[
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-dev-shm-usage",
+                    "--disable-web-security",
+                    "--lang=ko-KR"
+                ]
             )
-            context = browser.new_context(user_agent=UA)
+            context = browser.new_context(
+                user_agent=UA,
+                locale="ko-KR",
+                timezone_id="Asia/Seoul",
+                extra_http_headers={"Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"}
+            )
             page = context.new_page()
 
             url = f"https://www.dhlottery.co.kr/lt645/result?drwNo={draw_no}"
@@ -306,8 +318,8 @@ def do_login(page, user_id, user_pw):
     for login_url in LOGIN_URLS:
         try:
             logger.info(f"  [LOGIN] 시도: {login_url}")
-            page.goto(login_url, wait_until="domcontentloaded", timeout=15000)
-            time.sleep(1.0)
+            page.goto(login_url, wait_until="networkidle", timeout=30000)
+            time.sleep(1.5)
 
             # 현재 URL이 에러 페이지로 리다이렉트 되었는지 확인
             cur_url = page.url
@@ -378,18 +390,18 @@ def do_login(page, user_id, user_pw):
                     hiddenId.value = uid;
                 }
             }""", [user_id, user_pw])
-            time.sleep(0.3)
+            time.sleep(0.5)
 
-            # 로그인 버튼 클릭
+            # 로그인 버튼 클릭 (확인 가능할 때까지 대기)
             logger.info("  [LOGIN] 로그인 버튼 클릭...")
             page.click(login_btn)
 
-            # 페이지 로딩 대기
+            # 페이지 로딩 대기 (Cloud 환경 고려하여 최대 25초 대기)
             try:
-                page.wait_for_load_state("networkidle", timeout=15000)
+                page.wait_for_load_state("networkidle", timeout=25000)
             except:
                 pass
-            time.sleep(1.0)
+            time.sleep(2.0)
 
             # 로그인 성공 확인 (여러 방법으로 판단)
             for attempt in range(20):
@@ -533,11 +545,16 @@ def do_purchase(page, numbers):
         logger.info("  [1/7] 구매 페이지(game645.do) 이동...")
         # 직접 이동 전 메인 페이지를 한 번 거쳐 쿠키/Referer 유지
         try:
-            page.goto("https://dhlottery.co.kr/common.do?method=main", timeout=10000)
+            page.goto("https://dhlottery.co.kr/common.do?method=main", wait_until="load", timeout=15000)
+            time.sleep(1.0)
         except: pass
         
-        page.goto("https://ol.dhlottery.co.kr/olotto/game/game645.do", wait_until="domcontentloaded", timeout=30000)
-        time.sleep(1.0)
+        try:
+            page.goto("https://ol.dhlottery.co.kr/olotto/game/game645.do", wait_until="networkidle", timeout=30000)
+        except:
+            try: page.goto("https://ol.dhlottery.co.kr/olotto/game/game645.do", wait_until="load", timeout=20000)
+            except: pass
+        time.sleep(2.0)
 
         try:
             page.evaluate("""() => {
@@ -1042,15 +1059,25 @@ def automate_purchase(user_id, user_pw, numbers):
             headless=bool(is_cloud),
             args=[
                 "--no-sandbox", 
+                "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
                 "--disable-software-rasterizer",
                 "--single-process",
                 "--js-flags=--max-old-space-size=128",
-                "--disable-blink-features=AutomationControlled"
+                "--disable-blink-features=AutomationControlled",
+                "--lang=ko-KR"
             ]
         )
-        context = browser.new_context(viewport={"width": 1366, "height": 768}, user_agent=UA)
+        context = browser.new_context(
+            viewport={"width": 1920, "height": 1080},
+            user_agent=UA,
+            locale="ko-KR",
+            timezone_id="Asia/Seoul",
+            extra_http_headers={
+                "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"
+            }
+        )
         page = context.new_page()
         if HAS_STEALTH:
             Stealth().apply_stealth_sync(page)
@@ -1147,17 +1174,24 @@ def sync_history_endpoint():
                 headless=bool(is_cloud),
                 args=[
                     "--no-sandbox", 
+                    "--disable-setuid-sandbox",
                     "--disable-dev-shm-usage",
                     "--disable-gpu",
                     "--disable-software-rasterizer",
                     "--single-process",
                     "--js-flags=--max-old-space-size=128",
-                    "--disable-blink-features=AutomationControlled"
+                    "--disable-blink-features=AutomationControlled",
+                    "--lang=ko-KR"
                 ]
             )
             context = browser.new_context(
-                viewport={"width": 1366, "height": 768},
-                user_agent=UA
+                viewport={"width": 1920, "height": 1080},
+                user_agent=UA,
+                locale="ko-KR",
+                timezone_id="Asia/Seoul",
+                extra_http_headers={
+                    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"
+                }
             )
             page = context.new_page()
             if HAS_STEALTH:
@@ -1352,15 +1386,25 @@ def get_balance_api():
                 headless=bool(is_cloud),
                 args=[
                     "--no-sandbox", 
+                    "--disable-setuid-sandbox",
                     "--disable-dev-shm-usage",
                     "--disable-gpu",
                     "--disable-software-rasterizer",
                     "--single-process",
                     "--js-flags=--max-old-space-size=128",
-                    "--disable-blink-features=AutomationControlled"
+                    "--disable-blink-features=AutomationControlled",
+                    "--lang=ko-KR"
                 ]
             )
-            context = browser.new_context(user_agent=UA)
+            context = browser.new_context(
+                viewport={"width": 1920, "height": 1080},
+                user_agent=UA,
+                locale="ko-KR",
+                timezone_id="Asia/Seoul",
+                extra_http_headers={
+                    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"
+                }
+            )
             page = context.new_page()
             
             if HAS_STEALTH:
@@ -1496,15 +1540,22 @@ def news_endpoint():
                 headless=True,
                 args=[
                     "--no-sandbox", 
+                    "--disable-setuid-sandbox",
                     "--disable-dev-shm-usage",
                     "--disable-gpu",
                     "--disable-software-rasterizer",
                     "--single-process",
                     "--js-flags=--max-old-space-size=128",
-                    "--disable-blink-features=AutomationControlled"
+                    "--disable-blink-features=AutomationControlled",
+                    "--lang=ko-KR"
                 ]
             )
-            context = browser.new_context(user_agent=UA)
+            context = browser.new_context(
+                user_agent=UA,
+                locale="ko-KR",
+                timezone_id="Asia/Seoul",
+                extra_http_headers={"Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"}
+            )
             page = context.new_page()
             
             # 구글 뉴스 검색 (로또 키워드)
