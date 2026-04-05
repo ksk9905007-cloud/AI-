@@ -1,0 +1,7 @@
+Flask==3.0.2
+flask-cors==4.0.0
+playwright==1.42.0
+playwright-stealth==1.0.6
+gunicorn==21.2.0
+requests==2.31.0
+pyngrok==7.1.5

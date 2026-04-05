@@ -1,0 +1,192 @@
+{
+  "ksk016": [
+    {
+      "id": 6,
+      "draw_no": 1219,
+      "numbers": [],
+      "purchased_at": "2026-04-05 00:00:00",
+      "win_checked": true,
+      "win_result": {
+        "rank": -1,
+        "label": "당첨",
+        "match": 0,
+        "bonus": false
+      },
+      "official_result": "당첨",
+      "prize": ""
+    },
+    {
+      "id": 5,
+      "draw_no": 1218,
+      "numbers": [
+        7,
+        23,
+        24,
+        26,
+        32,
+        33
+      ],
+      "purchased_at": "2026-04-04 19:44:29",
+      "win_checked": true,
+      "win_result": {
+        "rank": 0,
+        "label": "미당첨",
+        "match": 0,
+        "bonus": 41,
+        "draw_no": 1218,
+        "draw_date": "2026-04-04",
+        "draw_numbers": [
+          8,
+          10,
+          15,
+          20,
+          29,
+          31
+        ],
+        "my_numbers": [
+          7,
+          23,
+          24,
+          26,
+          32,
+          33
+        ]
+      },
+      "official_result": "미당첨",
+      "prize": ""
+    },
+    {
+      "id": 4,
+      "draw_no": 1218,
+      "numbers": [
+        9,
+        17,
+        24,
+        25,
+        27,
+        43
+      ],
+      "purchased_at": "2026-04-04 19:03:12",
+      "win_checked": true,
+      "win_result": {
+        "rank": 0,
+        "label": "미당첨",
+        "match": 0,
+        "bonus": 41,
+        "draw_no": 1218,
+        "draw_date": "2026-04-04",
+        "draw_numbers": [
+          8,
+          10,
+          15,
+          20,
+          29,
+          31
+        ],
+        "my_numbers": [
+          9,
+          17,
+          24,
+          25,
+          27,
+          43
+        ]
+      },
+      "official_result": "미당첨",
+      "prize": ""
+    },
+    {
+      "id": 3,
+      "draw_no": 1218,
+      "numbers": [
+        2,
+        10,
+        17,
+        32,
+        37,
+        39
+      ],
+      "purchased_at": "2026-04-04 19:01:31",
+      "win_checked": true,
+      "win_result": {
+        "rank": 0,
+        "label": "미당첨",
+        "match": 1,
+        "bonus": 41,
+        "draw_no": 1218,
+        "draw_date": "2026-04-04",
+        "draw_numbers": [
+          8,
+          10,
+          15,
+          20,
+          29,
+          31
+        ],
+        "my_numbers": [
+          2,
+          10,
+          17,
+          32,
+          37,
+          39
+        ]
+      },
+      "official_result": "미당첨",
+      "prize": ""
+    },
+    {
+      "id": 2,
+      "draw_no": 1217,
+      "numbers": [
+        10,
+        17,
+        25,
+        34,
+        43,
+        45
+      ],
+      "purchased_at": "2026-04-04 18:50:47",
+      "win_checked": true,
+      "win_result": {
+        "rank": 0,
+        "label": "미당첨",
+        "match": 1,
+        "bonus": 25,
+        "draw_no": 1217,
+        "draw_date": "2026-03-28",
+        "draw_numbers": [
+          3,
+          10,
+          14,
+          15,
+          23,
+          24
+        ],
+        "my_numbers": [
+          10,
+          17,
+          25,
+          34,
+          43,
+          45
+        ]
+      }
+    },
+    {
+      "id": 1,
+      "draw_no": 1218,
+      "numbers": [],
+      "purchased_at": "2026-04-04 00:00:00",
+      "win_checked": false,
+      "win_result": {
+        "rank": -1,
+        "label": "미추첨",
+        "match": 0,
+        "bonus": false
+      },
+      "official_result": "미추첨",
+      "prize": ""
+    }
+  ]
+}

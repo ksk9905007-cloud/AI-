@@ -1,0 +1,2135 @@
+<!DOCTYPE html>
+
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AI 로또 분석 포털</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<style>
+    :root {
+        --primary: #6366F1;
+        --primary-dark: #4F46E5;
+        --primary-light: #C7D2FE;
+        --secondary: #10B981;
+        --accent: #F59E0B;
+        --danger: #EF4444;
+        --bg: #F8FAFC;
+        --card: rgba(255, 255, 255, 0.8);
+        --border: rgba(226, 232, 240, 0.8);
+        --text-main: #1E293B;
+        --text-muted: #64748B;
+        
+        /* Premium Gradient */
+        --grad-main: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+        --grad-dark: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
+        
+        /* Lotto Ball Colors - Refined */
+        --b1: #FFD700; --b1t: #856404;
+        --b2: #30D5C8; --b2t: #004d40;
+        --b3: #FF6B6B; --b3t: #721c24;
+        --b4: #AAAAAA; --b4t: #333333;
+        --b5: #77DD77; --b5t: #155724;
+    }
+    
+    * { margin:0; padding:0; box-sizing:border-box; }
+    
+    body { 
+        font-family: 'Pretendard', -apple-system, system-ui, sans-serif; 
+        background: #F1F5F9;
+        background-image: 
+            radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.1) 0px, transparent 50%),
+            radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.1) 0px, transparent 50%);
+        color: var(--text-main); 
+        min-height: 100vh; 
+        line-height: 1.5;
+    }
+
+        /* ─ Header ─ */
+        header {
+            background: rgba(255, 255, 255, 0.85); 
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255,255,255,0.3);
+            padding: 1.2rem 2rem; 
+            display: flex; justify-content: space-between; align-items: center;
+            position: sticky; top: 0; z-index: 200; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+        }
+        .logo { font-size: 1.5rem; font-weight: 900; color: var(--primary); display: flex; align-items: center; gap: 8px; letter-spacing: -0.5px;}
+        .logo em { color: #F59E0B; font-style: normal; }
+    #headerStatus { 
+        font-size: 0.8rem; font-weight: 700; padding: 0.5rem 1.25rem; 
+        border-radius: 50px; background: rgba(255, 255, 255, 0.5); 
+        border: 1px solid var(--border); transition: all 0.3s ease;
+        display: flex; align-items: center; gap: 6px;
+    }
+
+        /* ─ Layout ─ */
+        
+        
+
+        /* ─ Card ─ */
+    .card { 
+        background: var(--card); 
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid var(--border); 
+        border-radius: 1.5rem; 
+        padding: 2rem; 
+        margin-bottom: 1.5rem; 
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .card:hover { 
+        transform: translateY(-4px);
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        border-color: rgba(99, 102, 241, 0.3);
+    }
+    .card-title { 
+        font-size: 1.25rem; font-weight: 800; margin-bottom: 1.5rem; 
+        display: flex; align-items: center; gap: 12px; color: var(--text-main); 
+        letter-spacing: -0.02em;
+    }
+
+        /* ─ Lotto Balls ─ */
+        .ball-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .ball { 
+            width: 46px; height: 46px; border-radius: 50%; 
+            display: flex; align-items: center; justify-content: center; 
+            font-weight: 800; font-size: 1.1rem; 
+            box-shadow: inset 0 -3px 0 rgba(0,0,0,0.1), 0 4px 6px rgba(0,0,0,0.1); 
+            text-shadow: 0 1px 1px rgba(255,255,255,0.5);
+        }
+        .ball.sm { width: 34px; height: 34px; font-size: 0.85rem; box-shadow: inset 0 -2px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.08); }
+        .ball.lg { width: 56px; height: 56px; font-size: 1.3rem; }
+        .plus { color: var(--text-muted); font-size: 1.5rem; font-weight: 800; margin: 0 4px;}
+        .c1{background: var(--b1); color: var(--b1t);}
+        .c2{background: var(--b2); color: var(--b2t);}
+        .c3{background: var(--b3); color: var(--b3t);}
+        .c4{background: var(--b4); color: var(--b4t);}
+        .c5{background: var(--b5); color: var(--b5t);}
+
+        /* ─ Latest Result ─ */
+        .draw-meta { font-size: 0.95rem; color: var(--text-muted); margin-bottom: 1.2rem; font-weight: 500; }
+        .draw-no-badge { 
+            font-weight: 800; color: var(--primary); font-size: 1.1rem; 
+            background: #EEF2FF; padding: 0.3rem 0.8rem; border-radius: 8px; margin-right: 8px;
+        }
+        .amount-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.5rem; }
+        .amount-item { 
+            background: #F8FAFC; border-radius: 1rem; padding: 1.2rem; 
+            border: 1px solid #F1F5F9; text-align: center;
+        }
+        .amount-label { font-size: 0.85rem; color: var(--text-muted); font-weight: 600; margin-bottom: 0.4rem; }
+        .amount-val { font-size: 1.2rem; font-weight: 800; color: var(--primary); }
+
+        /* ─ Prediction Panel ─ */
+    .predict-panel {
+        background: var(--grad-dark);
+        color: #FFFFFF; border-radius: 2rem; padding: 2.5rem; margin-bottom: 2rem;
+        box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.5);
+        position: relative; overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+    .predict-panel::before {
+        content: ''; position: absolute; top: -50%; right: -50%; width: 100%; height: 100%;
+        background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+        pointer-events: none;
+    }
+        .predict-panel .card-title { color: #FFFFFF; font-size: 1.25rem; }
+        .predict-display { display: flex; gap: 12px; justify-content: center; min-height: 64px; margin: 2rem 0; flex-wrap: wrap; }
+        .p-ball {
+            width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 1.4rem; background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.2); transform: scale(0.8); opacity: 0;
+            transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: inset 0 2px 4px rgba(255,255,255,0.1);
+        }
+        .p-ball.on { transform: scale(1); opacity: 1; border-color: #FCD34D; background: #FCD34D; color: #78350F; box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
+
+        /* ─ Buttons ─ */
+        .btn { 
+            padding: 0.9rem 1.4rem; border-radius: 1rem; font-weight: 700; cursor: pointer; 
+            border: none; font-family: inherit; display: flex; align-items: center; justify-content: center; 
+            gap: 8px; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); font-size: 1rem; letter-spacing: -0.02em;
+        }
+        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3); }
+        .btn-primary:hover { background: #4338CA; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4); }
+        .btn-outline { background: #fff; border: 2px solid var(--border); color: var(--text-main); }
+        .btn-outline:hover { background: #F9FAFB; border-color: #D1D5DB; }
+        .btn-gold { background: linear-gradient(135deg, #F59E0B, #D97706); color: #fff; box-shadow: 0 4px 15px rgba(245,158,11,0.3); }
+        .btn-gold:hover { filter: brightness(1.1); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(245,158,11,0.4); }
+        .btn-success { background: var(--secondary); color: #fff; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3); }
+        .btn-success:hover { background: var(--success); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4); }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-sm { padding: 0.6rem 1rem; font-size: 0.85rem; border-radius: 0.75rem; }
+        .btn-full { width: 100%; margin-top: 1rem; padding: 1.1rem; font-size: 1.05rem; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+        /* ─ Purchase History ─ */
+        .history-wrap { max-height: 420px; overflow-y: auto; padding-right: 5px; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+        
+        .history-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.9rem; }
+        .history-table th { 
+            background: #F8FAFC; padding: 1rem; font-weight: 700; text-align: left; 
+            color: var(--text-muted); border-bottom: 2px solid #E2E8F0; 
+        }
+        .history-table th:first-child { border-top-left-radius: 12px; }
+        .history-table th:last-child { border-top-right-radius: 12px; }
+        .history-table td { padding: 1rem; border-bottom: 1px solid #F1F5F9; vertical-align: middle; color: var(--text-main); }
+        .history-table tr:hover td { background: #F8FAFC; }
+        .history-item td:first-child { font-weight: 700; color: var(--primary); }
+        
+        .win-badge { padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.8rem; font-weight: 800; white-space: nowrap; display: inline-block; text-align: center;}
+        .win-1 { background: #FEF3C7; color: #92400E; box-shadow: inset 0 0 0 1px #FDE68A; }
+        .win-2 { background: #E0E7FF; color: #3730A3; box-shadow: inset 0 0 0 1px #C7D2FE; }
+        .win-3 { background: #D1FAE5; color: #065F46; box-shadow: inset 0 0 0 1px #A7F3D0; }
+        .win-4 { background: #FCE7F3; color: #9D174D; box-shadow: inset 0 0 0 1px #FBCFE8; }
+        .win-5 { background: #EDE9FE; color: #5B21B6; box-shadow: inset 0 0 0 1px #DDD6FE; }
+        .win-0 { background: #F1F5F9; color: #64748B; box-shadow: inset 0 0 0 1px #E2E8F0; }
+        .win-none { background: #FFFFFF; color: #94A3B8; border: 1px dashed #CBD5E1; }
+        
+        .check-btn { 
+            padding: 0.4rem 0.8rem; border-radius: 0.5rem; background: var(--primary-light); 
+            color: #fff; border: none; cursor: pointer; font-size: 0.8rem; font-weight: 700; transition: background 0.2s;
+        }
+        .check-btn:hover:not(:disabled) { background: var(--primary); }
+
+        /* ─ Toast ─ */
+        #toast { 
+            position: fixed; top: 24px; left: 50%; transform: translate(-50%, -20px); 
+            background: rgba(17, 24, 39, 0.9); backdrop-filter: blur(8px); color: #fff; 
+            padding: 0.85rem 1.8rem; border-radius: 50px; font-size: 0.95rem; font-weight: 600;
+            z-index: 9999; opacity: 0; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
+            pointer-events: none; box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
+        }
+        #toast.show { opacity: 1; transform: translate(-50%, 0); }
+        
+        .btn-link { 
+            text-decoration: none; color: var(--primary); font-size: 0.9rem; font-weight: 700;
+            display: flex; align-items: center; gap: 6px; padding: 0.6rem 1.2rem;
+            background: #EEF2FF; border-radius: 50px; border: 1px solid #E0E7FF;
+            transition: all 0.3s ease;
+        }
+        .btn-link:hover { background: var(--primary); color: #fff; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(79, 70, 229, 0.25); }
+        .btn-link svg { width: 16px; height: 16px; }
+
+        /* ─ Modal ─ */
+        .modal { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(6px); display: none; align-items: center; justify-content: center; z-index: 1000; opacity: 0; transition: opacity 0.3s; }
+        .modal.open { display: flex; opacity: 1; }
+        .modal-box { 
+            background: #fff; padding: 2.5rem; border-radius: 1.5rem; width: 92%; max-width: 440px; 
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); transform: scale(0.95); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
+        }
+        .modal.open .modal-box { transform: scale(1); }
+        .modal-title { font-size: 1.3rem; font-weight: 800; margin-bottom: 0.5rem; color: var(--text-main); letter-spacing: -0.02em;}
+        .modal-desc { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.5rem; line-height: 1.6; }
+        
+        .input-wrap { margin-bottom: 1.2rem; }
+        .input-wrap label { display: block; font-size: 0.8rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .input-wrap input { 
+            width: 100%; padding: 0.9rem 1.2rem; border: 2px solid #E5E7EB; border-radius: 1rem; 
+            font-family: inherit; font-size: 1.05rem; outline: none; transition: all 0.2s; background: #F9FAFB;
+        }
+        .input-wrap input:focus { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1); }
+        #modalStatus { font-size: 0.85rem; margin: 1rem 0; min-height: 1.2rem; color: var(--text-muted); font-weight: 500;}
+
+        /* ─ 구매 성공 팝업 ─ */
+        .success-modal .modal-box {
+            text-align: center; background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+            border: 2px solid #34D399; box-shadow: 0 20px 40px rgba(52, 211, 153, 0.2);
+        }
+        .success-icon { font-size: 4.5rem; margin-bottom: 0.8rem; animation: bounce 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes bounce { 0%,100%{transform:scale(1)} 50%{transform:scale(1.15)} }
+        .success-title { font-size: 1.6rem; font-weight: 900; color: #065F46; margin-bottom: 0.5rem; letter-spacing: -0.02em; }
+        .success-draw { font-size: 1rem; color: #047857; margin-bottom: 1.2rem; font-weight: 600;}
+        .success-numbers { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 1.5rem 0; }
+        .success-time { font-size: 0.85rem; color: #10B981; margin-bottom: 1.5rem; font-weight: 500;}
+
+        /* ─ Search ─ */
+        .search-wrap { margin-bottom: 1.2rem; position: relative; }
+        .search-wrap input { 
+            width: 100%; padding: 0.8rem 1.2rem 0.8rem 2.8rem; border: 2px solid #E5E7EB; 
+            border-radius: 1rem; font-size: 0.95rem; outline: none; transition: all 0.2s; background: #F9FAFB;
+        }
+        .search-wrap input:focus { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.05); }
+        .search-wrap svg { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: #9CA3AF; }
+        
+        /* ─ QR Scanner ─ */
+        .qr-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(10px); z-index: 2000; display: none; flex-direction: column; align-items: center; justify-content: center; color: #fff; opacity: 0; transition: opacity 0.3s; }
+        .qr-overlay.open { display: flex; opacity: 1; }
+        .qr-video-wrap { width: 90%; max-width: 360px; aspect-ratio: 1; position: relative; border-radius: 1.5rem; overflow: hidden; border: 4px solid rgba(255,255,255,0.2); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+        #qrVideo { width: 100%; height: 100%; object-fit: cover; }
+        .qr-scanner-line { position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: #34D399; box-shadow: 0 0 20px #34D399, 0 0 10px #34D399; animation: scan 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+        @keyframes scan { 0% { top: 0 } 50% { top: 100% } 100% { top: 0 } }
+        /* ─ Utilities ─ */
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+
+        /* ─ Sidebar Navigation ─ */
+    .layout-container {
+        max-width: 1400px; margin: 2rem auto; padding: 0 2rem;
+        display: grid; grid-template-columns: 280px 1fr; gap: 2.5rem;
+        align-items: start;
+    }
+        @media(max-width:1100px) {
+            .layout-container { grid-template-columns: 1fr; }
+        }
+        
+    .sidebar {
+        background: var(--card); backdrop-filter: blur(20px);
+        border: 1px solid var(--border);
+        border-radius: 2rem; padding: 1.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        position: sticky; top: 100px;
+    }
+    
+    .side-nav { display: flex; flex-direction: column; gap: 0.75rem; }
+    .nav-item {
+        display: flex; align-items: center; gap: 14px; padding: 1rem 1.25rem;
+        border-radius: 1.25rem; cursor: pointer; color: var(--text-muted);
+        font-weight: 700; font-size: 1rem; transition: all 0.3s ease;
+        border: 1px solid transparent;
+    }
+    .nav-item:hover { 
+        background: rgba(99, 102, 241, 0.05); 
+        color: var(--primary);
+        transform: translateX(5px);
+    }
+    .nav-item.active {
+        background: var(--grad-main); color: #fff;
+        box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.4);
+    }
+    .nav-icon { font-size: 1.4rem; }
+        
+        /* ─ View Sections ─ */
+        .view-section { display: none; animation: fadeIn 0.4s ease; }
+        .view-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Inner Grid for Main View */
+        .main-view-grid {
+            display: grid; grid-template-columns: 1fr 400px; gap: 2rem;
+        }
+        @media(max-width:960px) { .main-view-grid { grid-template-columns: 1fr; } }
+        
+        /* Analysis UI */
+        .analysis-filters {
+            display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;
+        }
+        .filter-select {
+            padding: 0.8rem 1rem; border: 2px solid var(--border); border-radius: 0.8rem;
+            font-family: inherit; font-size: 0.95rem; outline: none; background: #fff;
+        }
+        .analysis-stat-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.2rem; margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: #F8FAFC; border-radius: 1rem; padding: 1.2rem; text-align: center; border: 1px solid var(--border);
+        }
+        .stat-title { font-size: 0.85rem; color: var(--text-muted); font-weight: 700; margin-bottom: 0.5rem;}
+        .stat-value { font-size: 1.5rem; font-weight: 900; color: var(--primary); }
+
+
+        .picker-ball { 
+            width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            font-weight: 700; transition: all 0.2s; background: #f9fafb; font-size: 0.9rem;
+        }
+        .picker-ball:hover { background: #eef2ff; border-color: var(--primary); }
+        .picker-ball.selected { background: var(--primary); color: #fff; border-color: var(--primary); transform: scale(1.1); box-shadow: 0 4px 10px rgba(79,70,229,0.3); }
+        
+        @keyframes pulse-gold {
+            0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); transform: scale(1); }
+            70% { box-shadow: 0 0 0 15px rgba(245, 158, 11, 0); transform: scale(1.02); }
+            100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); transform: scale(1); }
+        }
+        .loading-active { animation: pulse-gold 1.5s infinite !important; background: #d97706 !important; }
+    
+        .picker-ball { 
+            width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            font-weight: 700; transition: all 0.2s; background: #f9fafb; font-size: 0.9rem;
+        }
+        .picker-ball:hover { background: #eef2ff; border-color: var(--primary); }
+        .picker-ball.selected { background: var(--primary); color: #fff; border-color: var(--primary); transform: scale(1.1); box-shadow: 0 4px 10px rgba(79,70,229,0.3); }
+        
+    .ai-pulse { animation: ai-pulse 2s infinite; }
+    
+    /* Finance Table Style */
+    .finance-table-wrapper { overflow-x: auto; margin-top: 1rem; border-radius: 1rem; border: 1px solid var(--border); background: #fff; }
+    .finance-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; min-width: 900px; }
+    .finance-table th { background: #f8fafc; padding: 1rem; text-align: center; font-weight: 700; color: var(--text-muted); border-bottom: 2px solid var(--border); border-right: 1px solid var(--border); }
+    .finance-table td { padding: 0.85rem 1rem; text-align: center; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); font-weight: 600; }
+    .finance-table tr:last-child td { border-bottom: none; }
+    .finance-table th:last-child, .finance-table td:last-child { border-right: none; }
+    .finance-table .asset-name { text-align: left; font-weight: 800; color: var(--text-main); background: #fdfdfd; min-width: 140px; }
+    
+    .val-up { color: var(--danger); }
+    .val-down { color: var(--primary); }
+    .val-stable { color: var(--text-muted); }
+    
+    .ma-status { display: flex; gap: 4px; justify-content: center; }
+    .ma-dot { width: 8px; height: 8px; border-radius: 50%; background: #e2e8f0; }
+    .ma-dot.active { background: var(--secondary); box-shadow: 0 0 5px var(--secondary); }
+    
+    .tag-blue { background: rgba(99, 102, 241, 0.1); color: var(--primary); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; }
+    </style>
+</head>
+<body>
+<header>
+<div class="logo">🎱 AI-LOTTO <em>PORTAL</em></div>
+<div style="display:flex; align-items:center; gap:1rem;">
+<a class="btn-link" href="https://dhlottery.co.kr/" target="_blank">
+<svg fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3" viewbox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" x2="21" y1="14" y2="3"></line></svg>
+                동행복권 공식사이트
+            </a>
+<div id="headerStatus" style="color:var(--danger)">● 서버 연결 중...</div>
+</div>
+</header><div class="layout-container">
+<aside class="sidebar">
+<nav class="side-nav">
+<a class="nav-item active" onclick="switchNavTab('main')">
+<span class="nav-icon">🎱</span> Main
+                </a>
+<a class="nav-item" onclick="switchNavTab('lotto')">
+<span class="nav-icon">📊</span> 로또분석조합
+                </a>
+<a class="nav-item" onclick="switchNavTab('youtube')">
+<span class="nav-icon">▶️</span> 유튜브
+                </a>
+<a class="nav-item" onclick="switchNavTab('invest')">
+<span class="nav-icon">📈</span> 투자(주식/코인)
+                </a>
+<a class="nav-item" onclick="switchNavTab('minigame')"><span class="nav-icon">🎮</span> 미니게임</a>
+</nav>
+<!-- 동행복권 충전 섹션 -->
+<div class="recharge-section" style="margin-top: 2rem; padding: 0 0.5rem;">
+    <button class="btn btn-primary btn-full" onclick="openChargeLink()" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); border: none; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);">
+        💳 동행복권 예치금, 충전하기
+    </button>
+    <div id="virtualAccountInfo" style="display:none; font-size: 0.75rem; color: var(--success); text-align: center; margin-top: 0.8rem; font-weight: 700; background: rgba(5, 150, 105, 0.05); padding: 0.6rem; border-radius: 0.8rem; border: 1px dashed rgba(5, 150, 105, 0.2);"></div>
+    <div id="walletSyncStatus" onclick="syncWalletBalance()" style="font-size:0.75rem; color:var(--text-muted); text-align:center; margin-top:0.8rem; cursor:pointer; font-weight:600; display: flex; align-items: center; justify-content: center; gap: 4px;">
+        <span style="font-size: 0.9rem;">🔄</span> 잔액 동기화
+    </div>
+</div>
+</aside>
+<main class="content-area"><div class="view-section active" id="view-main"><div class="main-view-grid">
+<!-- ── 왼쪽 컬럼 ── -->
+<div>
+<!-- 번호 생성 -->
+                <div class="predict-panel">
+                    <div class="card-title">🔬 AI 로또 번호 분석기</div>
+                    <p style="color:#94a3b8; font-size:0.85rem; margin-bottom: 2rem;">최신 하이퍼-파라미터 기반 지능형 추천 엔진</p>
+                    
+                    <!-- 번호 표시 구역 -->
+                    <div class="predict-display" id="predictDisplay" style="background: rgba(255,255,255,0.03); border-radius: 1.5rem; border: 1px solid rgba(255,255,255,0.05); padding: 2rem 0; margin-bottom: 2rem;">
+                        <div style="display:flex; flex-direction:column; align-items:center; opacity:0.6;">
+                            <div class="ai-pulse" style="width:40px; height:40px; background:rgba(255,255,255,0.2); border-radius:50%; margin-bottom:1rem;"></div>
+                            <span style="color:#94a3b8; font-size:0.95rem; font-weight:600;">분석 시스템 대기 중...</span>
+                        </div>
+                    </div>
+
+                    <!-- 생성 버튼 그룹 -->
+                    <div class="btn-group-wrap" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                        <div class="btn-grid" style="grid-template-columns: 1fr 1fr; gap: 0.8rem;">
+                            <button class="btn btn-outline" onclick="generate('auto')" style="background:rgba(255,255,255,0.06); color:#fff; border-color:rgba(255,255,255,0.15);">⚡ 랜덤 번호</button>
+                            <button class="btn btn-primary" onclick="generate('stat')" style="background: var(--grad-main); border: none;">📊 통계 분석</button>
+                        </div>
+                        
+                        <!-- 수동 구역 -->
+                        <div style="padding: 1.2rem; background: rgba(255,255,255,0.03); border-radius: 1.25rem; border: 1px solid rgba(255,255,255,0.05);">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem;">
+                                <span style="font-size: 0.85rem; font-weight: 700; color: #cbd5e1;">✍️ 수동 선택 모드</span>
+                                <span style="font-size: 0.75rem; color: #64748b;">원하는 번호를 직접 조합</span>
+                            </div>
+                            <button class="btn btn-sm" onclick="openManualPicker()" style="width: 100%; height: 3rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #10B981; font-weight: 700;">
+                                👆 번호판에서 6개 선택하기
+                            </button>
+                        </div>
+
+                        <!-- 실행 버튼 그룹 -->
+                        <div class="btn-grid" style="grid-template-columns: 1.2fr 0.8fr; gap: 0.8rem;">
+                            <button class="btn btn-gold btn-server-dep" id="purchaseBtn" onclick="openPurchaseModal()" style="height: 3.5rem; font-size: 1.1rem; border-radius: 1rem;">
+                                🛒 자동 구매
+                            </button>
+                            <button class="btn btn-success" onclick="startQRScan()" style="height: 3.5rem; opacity: 0.9;">
+                                📷 QR 등록
+                            </button>
+                        </div>
+                    </div>
+                </div>
+<!-- 구매 이력 -->
+<div class="card">
+<div class="card-title" style="justify-content:space-between;">
+<span>📋 구매 이력</span>
+<div style="display:flex;gap:.4rem;align-items:center;">
+<span id="historyUserId" onclick="openSyncModal()" style="font-size:.8rem;color:var(--muted);font-weight:600; cursor:pointer;" title="계정 관리"></span>
+<button class="btn btn-sm btn-outline btn-server-dep" onclick="openSyncModal()" title="공식 사이트 동기화">🔄 동기화</button>
+<button class="btn btn-sm btn-success btn-server-dep" onclick="checkAllWins()">🏆 당첨 확인</button>
+</div>
+</div>
+<div class="search-wrap">
+<svg fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" x2="16.65" y1="21" y2="16.65"></line></svg>
+<input id="historySearch" oninput="filterHistory()" placeholder="회차 또는 번호 검색..." type="text"/>
+</div>
+<div class="history-wrap">
+<table class="history-table">
+<thead>
+<tr>
+<th>회차</th>
+<th>구매 번호</th>
+<th>구매일시</th>
+<th>당첨금</th>
+<th>당첨</th>
+<th>확인</th>
+</tr>
+</thead>
+<tbody id="historyBody">
+<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:1.5rem;">구매 이력이 없습니다</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- ── 오른쪽 컬럼 ── -->
+<div>
+<!-- 최신 당첨 결과 -->
+<div class="card">
+<div class="card-title">🏆 최신 당첨 결과</div>
+<div id="latestDraw">
+<div style="color:var(--muted);text-align:center;padding:1rem;">정보 불러오는 중...</div>
+</div>
+</div>
+<!-- 당첨 확인기 -->
+<div class="card">
+<div class="card-title">🎯 당첨 번호 조회/확인</div>
+<div style="display:flex;gap:.5rem;margin-bottom:1rem;">
+<input id="checkDrawNo" placeholder="회차 입력 (예: 1215)" style="flex:1;padding:.7rem;border:1.5px solid var(--border);border-radius:.75rem;font-family:inherit;outline:none;" type="number"/>
+<button class="btn btn-primary btn-sm" onclick="fetchDrawResult()">조회</button>
+</div>
+<div id="drawResultArea" style="display:none;">
+<div class="draw-meta" id="drawResultMeta"></div>
+<div class="ball-row" id="drawResultBalls" style="margin-bottom:1rem;"></div>
+<div style="border-top:1px solid var(--border);padding-top:1rem;margin-top:.5rem;">
+<p style="font-size:.82rem;font-weight:700;margin-bottom:.5rem;color:var(--muted);">내 번호와 비교:</p>
+<input id="myNumbersInput" placeholder="번호 6개 입력 (예: 5,16,26,33,40,42)" style="width:100%;padding:.7rem;border:1.5px solid var(--border);border-radius:.75rem;font-family:inherit;font-size:.85rem;outline:none;margin-bottom:.6rem;" type="text"/>
+<button class="btn btn-gold btn-full" onclick="checkWinManual()">🔍 당첨 확인</button>
+<div id="winResultArea" style="margin-top:.8rem;"></div>
+</div>
+</div>
+</div>
+<!-- 최근 추천 내역 -->
+<div class="card">
+<div class="card-title">🕒 최근 추천 내역</div>
+<div id="recentList" style="display:flex;flex-direction:column;gap:.5rem;">
+<div style="color:var(--muted);font-size:.85rem;">번호를 생성하면 여기에 표시됩니다</div>
+</div>
+</div>
+<div class="card" style="margin-top: 1.5rem;">
+    <div class="card-title" style="justify-content: space-between;">
+        <span style="display: flex; align-items: center; gap: 8px;">📰 로또 실시간 뉴스 <span style="font-size: 0.65rem; color: #fff; background: var(--danger); padding: 1px 6px; border-radius: 4px; font-weight: 800; animation: ai-pulse 2s infinite;">LIVE</span></span>
+        <button class="btn btn-sm btn-outline" onclick="fetchRealtimeNews()" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; border-radius: 0.6rem; background: #fff; border: 1px solid var(--border); color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+            <span style="font-size: 0.8rem;">🔄</span> 실시간 검색
+        </button>
+    </div>
+    <div id="lottoNewsContainer" style="display:flex; flex-direction:column; gap:0.8rem;">
+        <div style="text-align:center; padding: 1.5rem; color: var(--text-muted); font-size: 0.85rem;">
+            📡 뉴스를 동기화 중입니다...
+        </div>
+    </div>
+</div>
+</div>
+</div></div>
+<div class="view-section" id="view-lotto">
+<div class="card" style="margin-bottom: 2rem;">
+<div class="card-title">📊 정밀 로또 데이터 분석</div>
+<div class="analysis-filters">
+<select class="filter-select" id="analysisPeriod">
+<option value="1year">최근 1년 (기본)</option>
+<option value="6months">최근 6개월</option>
+<option value="3months">최근 3개월</option>
+<option value="all">역대 전체</option>
+</select>
+<select class="filter-select" id="analysisType">
+<option value="all">전체 구매 방식</option>
+<option value="auto">자동</option>
+<option value="manual">수동</option>
+</select>
+<button class="btn btn-primary" id="analysisBtn" onclick="executeAnalysis()">🔍 분석 실행</button>
+</div>
+<h3 style="font-size:1.05rem; margin-bottom:1rem; color:var(--text-main);">🏆 가장 많이 나온 번호 빈도 분석</h3>
+<div class="analysis-stat-grid" id="freqStats">
+<div class="stat-card"><div class="stat-title">1위 번호 (출현 82회)</div><div class="ball c4" style="margin: 0 auto; box-shadow: 0 0 15px rgba(156,163,175, 0.5);">34</div></div>
+<div class="stat-card"><div class="stat-title">2위 번호 (출현 75회)</div><div class="ball c2" style="margin: 0 auto;">18</div></div>
+<div class="stat-card"><div class="stat-title">3위 번호 (출현 71회)</div><div class="ball c3" style="margin: 0 auto;">27</div></div>
+<div class="stat-card"><div class="stat-title">4위 번호 (출현 68회)</div><div class="ball c1" style="margin: 0 auto;">5</div></div>
+<div class="stat-card"><div class="stat-title">5위 번호 (출현 65회)</div><div class="ball c5" style="margin: 0 auto;">42</div></div>
+<div class="stat-card"><div class="stat-title">6위 번호 (출현 61회)</div><div class="ball c2" style="margin: 0 auto;">11</div></div>
+</div>
+<h3 style="font-size:1.05rem; margin-bottom:1rem; margin-top:2rem; color:var(--text-main);">⚙️ 최적 로또 번호 조합 및 추출</h3>
+<div style="background:#F9FAFB; border-radius:1rem; padding:1.8rem; border:1px solid var(--border);">
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+<div class="input-wrap" style="margin-bottom:0;">
+<label>선택 1 : 분석 기간</label>
+<select class="filter-select" id="optPeriod" style="width:100%; border-radius:0.5rem; padding:0.6rem;">
+<option value="1">최근 1년</option>
+<option value="3">최근 3년</option>
+<option value="5">최근 5년</option>
+<option value="10">최근 10년</option>
+</select>
+</div>
+<div class="input-wrap" style="margin-bottom:0;">
+<label>선택 2 : 주요 발생 월별</label>
+<select class="filter-select" id="optMonth" style="width:100%; border-radius:0.5rem; padding:0.6rem;"><option value="all">전체 월</option><option value="1">1월</option><option value="2">2월</option><option value="3">3월</option><option value="4">4월</option><option value="5">5월</option><option value="6">6월</option><option value="7">7월</option><option value="8">8월</option><option value="9">9월</option><option value="10">10월</option><option value="11">11월</option><option value="12">12월</option></select>
+</div>
+<div class="input-wrap" style="margin-bottom:0;">
+<label>선택 3 : 연도 홀짝 분포</label>
+<select class="filter-select" id="optOddEven" style="width:100%; border-radius:0.5rem; padding:0.6rem;">
+<option value="all">전체</option>
+<option value="even">짝수년도 강세 번호</option>
+<option value="odd">홀수년도 강세 번호</option>
+</select>
+<div class="input-wrap" style="margin-bottom:0;"><label>선택 5 : 특정 일자(1-31일)</label><select class="filter-select" id="optDay" style="width:100%; border-radius:0.5rem; padding:0.6rem;"><option value="all">전체 일</option><option value="1">1일</option><option value="2">2일</option><option value="3">3일</option><option value="4">4일</option><option value="5">5일</option><option value="6">6일</option><option value="7">7일</option><option value="8">8일</option><option value="9">9일</option><option value="10">10일</option><option value="11">11일</option><option value="12">12일</option><option value="13">13일</option><option value="14">14일</option><option value="15">15일</option><option value="16">16일</option><option value="17">17일</option><option value="18">18일</option><option value="19">19일</option><option value="20">20일</option><option value="21">21일</option><option value="22">22일</option><option value="23">23일</option><option value="24">24일</option><option value="25">25일</option><option value="26">26일</option><option value="27">27일</option><option value="28">28일</option><option value="29">29일</option><option value="30">30일</option><option value="31">31일</option></select></div></div>
+<div class="input-wrap" style="margin-bottom:0;">
+<label>선택 4 : 구매방식 보정</label>
+<select class="filter-select" id="optMethod" style="width:100%; border-radius:0.5rem; padding:0.6rem;">
+<option value="auto">자동 중심 패턴</option>
+<option value="manual">수동 중심 패턴</option>
+<option value="mix">반자동 최적화</option>
+</select>
+</div>
+</div>
+<button class="btn btn-primary btn-full" onclick="extractOptimalNumbers()" style="margin-top:0;">✨ 조건에 맞는 최적 번호 추출하기</button>
+<!-- Result Display -->
+<div id="optimalResultArea" style="display:none; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px dashed var(--border); text-align:center;">
+<h4 style="color:var(--text-main); margin-bottom: 1rem;">🎯 추출된 AI 최적 번호 조합</h4>
+<div class="ball-row" id="optimalBalls" style="justify-content:center; margin-bottom: 1.5rem;"></div>
+<button class="btn btn-gold btn-full" onclick="sendToMainAI()">👉 메인 단말(AI 분석기)로 번호 연계 및 구매하기</button>
+</div>
+</div>
+</div>
+</div>
+<div class="view-section" id="view-youtube">
+<div class="card">
+<div class="card-title">▶️ 유튜브 통합 미디어 포털</div>
+<div class="search-wrap" style="margin-bottom: 1.5rem; max-width: 600px;">
+<svg fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" x2="16.65" y1="21" y2="16.65"></line></svg>
+<input id="ytSearch" onkeypress="searchYoutube(event)" placeholder="유튜브 검색어를 입력하세요..." type="text"/>
+</div>
+<div style="display:flex; gap: 0.8rem; margin-bottom: 1.5rem;">
+<button class="btn btn-primary btn-sm" onclick="filterYoutube('재미')">🤣 재미있는</button>
+<button class="btn btn-success btn-sm" onclick="filterYoutube('음악')">🎵 트렌딩 음악</button>
+<button class="btn btn-outline btn-sm" onclick="filterYoutube('뉴스')">📰 실시간 뉴스</button>
+</div>
+<div id="ytVideoGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:1.5rem;">
+<!-- Videos will be injected here via JS -->
+<div style="color:var(--text-muted); text-align:center; grid-column: 1 / -1; padding: 2rem;">카테고리를 선택하거나 검색해주세요.</div>
+</div>
+</div>
+</div>
+<div class="view-section" id="view-invest">
+    <!-- 상단 주요 지수 카드 -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+        <div class="card" style="margin-bottom: 0; background: linear-gradient(to bottom right, #fff, #f8fafc);">
+            <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom: 0.5rem;">
+                <h4 style="color:var(--text-muted); font-size: 0.85rem; font-weight:700;">KOSPI</h4>
+                <span class="tag-blue">KOREA</span>
+            </div>
+            <div style="font-size: 1.6rem; font-weight: 800; color: var(--danger);">2,754.21 <span style="font-size: 0.9rem; font-weight:700;">▲ 1.2%</span></div>
+        </div>
+        <div class="card" style="margin-bottom: 0; background: linear-gradient(to bottom right, #fff, #f8fafc);">
+            <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom: 0.5rem;">
+                <h4 style="color:var(--text-muted); font-size: 0.85rem; font-weight:700;">NASDAQ</h4>
+                <span class="tag-blue">USA</span>
+            </div>
+            <div style="font-size: 1.6rem; font-weight: 800; color: var(--danger);">16,424.31 <span style="font-size: 0.9rem; font-weight:700;">▲ 0.8%</span></div>
+        </div>
+        <div class="card" style="margin-bottom: 0; background: linear-gradient(to bottom right, #fff, #f8fafc);">
+            <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom: 0.5rem;">
+                <h4 style="color:var(--text-muted); font-size: 0.85rem; font-weight:700;">BTC/KRW</h4>
+                <span class="tag-blue" style="background:rgba(245,158,11,0.1); color:#D97706;">CRYPTO</span>
+            </div>
+            <div style="font-size: 1.6rem; font-weight: 800; color: var(--primary);">98,421,000 <span style="font-size: 0.9rem; color: var(--secondary); font-weight:700;">▼ -0.5%</span></div>
+        </div>
+    </div>
+
+    <!-- 1. 종합지수 현황 -->
+    <div class="card">
+        <div class="card-title" style="margin-bottom: 0.5rem;">📊 실시간 종합 자산 현황</div>
+        <p style="color:var(--text-muted); font-size: 0.8rem; margin-bottom: 1.5rem;">글로벌 주요 원자재 및 암호화폐 변동률 추이</p>
+        
+        <div class="finance-table-wrapper">
+            <table class="finance-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2" class="asset-name">ASSET (자산명)</th>
+                        <th rowspan="2">MA STATUS<br>(20/60/120/308)</th>
+                        <th rowspan="2">YEAR<br>연간</th>
+                        <th colspan="2">QUARTER</th>
+                        <th colspan="3">MONTH (월간 성과)</th>
+                        <th colspan="4">WEEK (주간 성과)</th>
+                        <th rowspan="2">LATEST<br>현재가</th>
+                    </tr>
+                    <tr>
+                        <th>Q1</th><th>Q2</th>
+                        <th>1월</th><th>2월</th><th>3월</th>
+                        <th>1주</th><th>2주</th><th>3주</th><th>4주</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="asset-name">유가 (WTI)</td>
+                        <td><div class="ma-status"><span class="ma-dot active"></span><span class="ma-dot active"></span><span class="ma-dot active"></span><span class="ma-dot"></span></div></td>
+                        <td class="val-up">▲73.5%</td><td class="val-up">▲73.5%</td><td class="val-stable">--</td>
+                        <td class="val-up">▲13.6%</td><td class="val-up">▲2.8%</td><td class="val-up">▲48.7%</td>
+                        <td class="val-up">▲33.0%</td><td class="val-down">▼1.3%</td><td class="val-down">▼5.7%</td><td class="val-up">▲13.1%</td>
+                        <td>99.64</td>
+                    </tr>
+                    <tr>
+                        <td class="asset-name">채권 (US10Y)</td>
+                        <td><div class="ma-status"><span class="ma-dot active"></span><span class="ma-dot"></span><span class="ma-dot"></span><span class="ma-dot"></span></div></td>
+                        <td class="val-up">▲6.7%</td><td class="val-up">▲6.7%</td><td class="val-stable">--</td>
+                        <td class="val-up">▲1.9%</td><td class="val-down">▼6.6%</td><td class="val-up">▲12.1%</td>
+                        <td class="val-up">▲2.2%</td><td class="val-up">▲2.0%</td><td class="val-up">▲2.7%</td><td class="val-up">▲2.4%</td>
+                        <td>4.44</td>
+                    </tr>
+                    <tr>
+                        <td class="asset-name">금 (Gold)</td>
+                        <td><div class="ma-status"><span class="ma-dot active"></span><span class="ma-dot active"></span><span class="ma-dot"></span><span class="ma-dot"></span></div></td>
+                        <td class="val-up">▲3.8%</td><td class="val-up">▲3.8%</td><td class="val-stable">--</td>
+                        <td class="val-up">▲9.0%</td><td class="val-up">▲11.0%</td><td class="val-down">▼14.1%</td>
+                        <td class="val-down">▼3.8%</td><td class="val-down">▼1.9%</td><td class="val-down">▼11.8%</td><td class="val-up">▲2.0%</td>
+                        <td>4,492</td>
+                    </tr>
+                    <tr>
+                        <td class="asset-name">은 (Silver)</td>
+                        <td><div class="ma-status"><span class="ma-dot active"></span><span class="ma-dot"></span><span class="ma-dot"></span><span class="ma-dot"></span></div></td>
+                        <td class="val-down">▼0.8%</td><td class="val-down">▼0.8%</td><td class="val-stable">--</td>
+                        <td class="val-up">▲11.6%</td><td class="val-up">▲18.4%</td><td class="val-down">▼25.0%</td>
+                        <td class="val-down">▼4.8%</td><td class="val-down">▼4.5%</td><td class="val-down">▼14.0%</td><td class="val-up">▲0.7%</td>
+                        <td>69.545</td>
+                    </tr>
+                    <tr>
+                        <td class="asset-name">구리 (COPPER)</td>
+                        <td><div class="ma-status"><span class="ma-dot active"></span><span class="ma-dot active"></span><span class="ma-dot active"></span><span class="ma-dot"></span></div></td>
+                        <td class="val-down">▼2.9%</td><td class="val-down">▼2.9%</td><td class="val-stable">--</td>
+                        <td class="val-up">▲4.7%</td><td class="val-up">▲1.8%</td><td class="val-down">▼9.0%</td>
+                        <td class="val-down">▼1.6%</td><td class="val-down">▼0.2%</td><td class="val-down">▼6.1%</td><td class="val-up">▲0.5%</td>
+                        <td>5.467</td>
+                    </tr>
+                    <tr>
+                        <td class="asset-name">가스 (NAT GAS)</td>
+                        <td><div class="ma-status"><span class="ma-dot"></span><span class="ma-dot"></span><span class="ma-dot active"></span><span class="ma-dot active"></span></div></td>
+                        <td class="val-down">▼16.0%</td><td class="val-down">▼16.0%</td><td class="val-stable">--</td>
+                        <td class="val-up">▲18.1%</td><td class="val-down">▼34.3%</td><td class="val-up">▲8.3%</td>
+                        <td class="val-up">▲5.4%</td><td class="val-down">▼3.1%</td><td class="val-down">▼4.4%</td><td class="val-up">▲7.1%</td>
+                        <td>3.095</td>
+                    </tr>
+                    <tr>
+                        <td class="asset-name">비트코인 (BTC)</td>
+                        <td><div class="ma-status"><span class="ma-dot"></span><span class="ma-dot"></span><span class="ma-dot active"></span><span class="ma-dot active"></span></div></td>
+                        <td class="val-down">▼24.5%</td><td class="val-down">▼24.5%</td><td class="val-stable">--</td>
+                        <td class="val-down">▼13.3%</td><td class="val-down">▼14.6%</td><td class="val-up">▲1.9%</td>
+                        <td class="val-down">▼0.5%</td><td class="val-up">▲9.4%</td><td class="val-down">▼5.3%</td><td class="val-down">▼5.5%</td>
+                        <td>66,988</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card-title" style="margin-top: 2.5rem; margin-bottom: 0.5rem;">📈 GLOBAL INDICES STATUS</div>
+        <p style="color:var(--text-muted); font-size: 0.8rem; margin-bottom: 1.5rem;">글로벌 주요 지수 현황 (KOSPI / NASDAQ / S&P 500)</p>
+
+        <div class="finance-table-wrapper">
+            <table class="finance-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2" class="asset-name">INDEX (지수명)</th>
+                        <th rowspan="2">MA STATUS<br>(20/60/120/308)</th>
+                        <th rowspan="2">YEAR<br>연간</th>
+                        <th colspan="2">QUARTER</th>
+                        <th colspan="3">MONTH</th>
+                        <th colspan="4">WEEK</th>
+                        <th rowspan="2">CURRENT<br>현재 지수</th>
+                    </tr>
+                    <tr>
+                        <th>Q1</th><th>Q2</th>
+                        <th>1월</th><th>2월</th><th>3월</th>
+                        <th>1주</th><th>2주</th><th>3주</th><th>4주</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="asset-name">코스피 (KOSPI)</td>
+                        <td><div class="ma-status"><span class="ma-dot active"></span><span class="ma-dot active"></span><span class="ma-dot active"></span><span class="ma-dot active"></span></div></td>
+                        <td class="val-up">▲29.1%</td><td class="val-up">▲29.1%</td><td class="val-stable">--</td>
+                        <td class="val-up">▲24.0%</td><td class="val-up">▲19.5%</td><td class="val-down">▼12.9%</td>
+                        <td class="val-down">▼15.9%</td><td class="val-up">▲5.7%</td><td class="val-down">▼2.6%</td><td class="val-up">▲0.6%</td>
+                        <td>5,438.87</td>
+                    </tr>
+                    <tr>
+                        <td class="asset-name">코스닥 (KOSDAQ)</td>
+                        <td><div class="ma-status"><span class="ma-dot active"></span><span class="ma-dot active"></span><span class="ma-dot active"></span><span class="ma-dot"></span></div></td>
+                        <td class="val-up">▲23.3%</td><td class="val-up">▲23.3%</td><td class="val-stable">--</td>
+                        <td class="val-up">▲24.2%</td><td class="val-up">▲3.8%</td><td class="val-down">▼4.3%</td>
+                        <td class="val-down">▼7.6%</td><td class="val-up">▲3.3%</td><td class="val-down">▼3.6%</td><td class="val-up">▲4.1%</td>
+                        <td>1,141.51</td>
+                    </tr>
+                    <tr>
+                        <td class="asset-name">나스닥 (NASDAQ)</td>
+                        <td><div class="ma-status"><span class="ma-dot active"></span><span class="ma-dot"></span><span class="ma-dot"></span><span class="ma-dot"></span></div></td>
+                        <td class="val-down">▼9.9%</td><td class="val-down">▼9.9%</td><td class="val-stable">--</td>
+                        <td class="val-up">▲0.9%</td><td class="val-down">▼3.4%</td><td class="val-down">▼7.6%</td>
+                        <td class="val-down">▼0.2%</td><td class="val-down">▼1.4%</td><td class="val-down">▼1.9%</td><td class="val-down">▼4.5%</td>
+                        <td>20,948.35</td>
+                    </tr>
+                    <tr>
+                        <td class="asset-name">S&P 500</td>
+                        <td><div class="ma-status"><span class="ma-dot active"></span><span class="ma-dot active"></span><span class="ma-dot"></span><span class="ma-dot"></span></div></td>
+                        <td class="val-down">▼7.0%</td><td class="val-down">▼7.0%</td><td class="val-stable">--</td>
+                        <td class="val-up">▲1.4%</td><td class="val-down">▼0.9%</td><td class="val-down">▼7.4%</td>
+                        <td class="val-down">▼1.2%</td><td class="val-down">▼1.4%</td><td class="val-down">▼1.8%</td><td class="val-down">▼3.2%</td>
+                        <td>6,368.85</td>
+                    </tr>
+                    <tr>
+                        <td class="asset-name">니케이 (N225)</td>
+                        <td><div class="ma-status"><span class="ma-dot active"></span><span class="ma-dot active"></span><span class="ma-dot active"></span><span class="ma-dot active"></span></div></td>
+                        <td class="val-up">▲6.0%</td><td class="val-up">▲6.0%</td><td class="val-stable">--</td>
+                        <td class="val-up">▲5.9%</td><td class="val-up">▲10.4%</td><td class="val-down">▼9.3%</td>
+                        <td class="val-down">▼9.2%</td><td class="val-up">▲1.9%</td><td class="val-down">▼4.2%</td><td class="val-up">▲3.6%</td>
+                        <td>53,373.07</td>
+                    </tr>
+                    <tr>
+                        <td class="asset-name">상해종합 (SHA)</td>
+                        <td><div class="ma-status"><span class="ma-dot"></span><span class="ma-dot active"></span><span class="ma-dot active"></span><span class="ma-dot"></span></div></td>
+                        <td class="val-down">▼1.4%</td><td class="val-down">▼1.4%</td><td class="val-stable">--</td>
+                        <td class="val-up">▲3.8%</td><td class="val-up">▲1.1%</td><td class="val-down">▼6.0%</td>
+                        <td class="val-down">▼2.1%</td><td class="val-down">▼0.3%</td><td class="val-down">▼6.6%</td><td class="val-up">▲2.6%</td>
+                        <td>3,913.72</td>
+                    </tr>
+                    <tr>
+                        <td class="asset-name">항셍 (HSI)</td>
+                        <td><div class="ma-status"><span class="ma-dot"></span><span class="ma-dot"></span><span class="ma-dot active"></span><span class="ma-dot"></span></div></td>
+                        <td class="val-down">▼2.6%</td><td class="val-down">▼2.6%</td><td class="val-stable">--</td>
+                        <td class="val-up">▲6.9%</td><td class="val-down">▼2.8%</td><td class="val-down">▼6.3%</td>
+                        <td class="val-down">▼2.5%</td><td class="val-up">▲1.7%</td><td class="val-down">▼5.6%</td><td class="val-up">▲2.3%</td>
+                        <td>24,951.88</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 2. 실시간 시황 뉴스 -->
+    <div class="card">
+        <div class="card-title" style="justify-content: space-between;">
+            <span>📰 일일 브리핑 및 실시간 이슈 뉴스</span>
+            <button class="btn btn-sm btn-outline" style="font-size: 0.75rem;">더 많은 시황 보기</button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">
+            <div style="padding: 1.5rem; background: rgba(99, 102, 241, 0.03); border-radius: 1.25rem; border: 1px solid var(--border); display:flex; justify-content: space-between; align-items:center;">
+                <div style="flex: 1;">
+                    <h4 style="font-size: 1.05rem; font-weight: 800; margin-bottom: 0.5rem; color: var(--text-main);">"AI 반도체 훈풍" 삼성전자, SK하이닉스 52주 신고가 경신</h4>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">글로벌 반도체 랠리에 힘입어 국내 증시를 주도하고 있습니다.</p>
+                </div>
+                <div style="text-align:right; min-width: 80px;">
+                    <span style="font-size: 0.75rem; color: var(--primary); font-weight: 800;">10분 전</span>
+                </div>
+            </div>
+            
+            <div style="padding: 1.5rem; background: #fff; border: 1px solid var(--border); border-radius: 1.25rem; display:flex; justify-content: space-between; align-items:center;">
+                <div style="flex: 1;">
+                    <h4 style="font-size: 1.05rem; font-weight: 800; margin-bottom: 0.5rem; color: var(--text-main);">비트코인 반감기 도래, 향후 코인 시장 전망은?</h4>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">반감기를 앞두고 변동성이 커지는 가운데 1억 돌파 여부에 주목</p>
+                </div>
+                <div style="text-align:right; min-width: 80px;">
+                    <span style="font-size: 0.75rem; color: var(--primary); font-weight: 800;">1시간 전</span>
+                </div>
+            </div>
+
+            <div style="padding: 1.5rem; background: #fff; border: 1px solid var(--border); border-radius: 1.25rem; display:flex; justify-content: space-between; align-items:center;">
+                <div style="flex: 1;">
+                    <h4 style="font-size: 1.05rem; font-weight: 800; margin-bottom: 0.5rem; color: var(--text-main);">미 연준 금리 동결 유력, 하반기 인하 기대감 솔솔</h4>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">인플레이션 지표 둔화로 연내 금리 인하 가능성이 대두됩니다.</p>
+                </div>
+                <div style="text-align:right; min-width: 80px;">
+                    <span style="font-size: 0.75rem; color: var(--primary); font-weight: 800;">2시간 전</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="view-section" id="view-minigame">
+<div class="card">
+<div class="card-title">🎮 스트레스 해소 미니게임 존 (10선)</div>
+<p class="modal-desc" style="margin-bottom:1.5rem;">잠시 쉬어가며 스트레스를 날려버리세요! 원하는 게임을 선택하세요.</p>
+<div id="gameSelector" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap:1rem; margin-bottom:2rem;">
+<button class="btn btn-outline" onclick="loadGame('bubble')" style="flex-direction:column; padding:1.2rem; height:auto;"><span style="font-size:2rem; margin-bottom:0.5rem;">🫧</span> 버블 팝업</button>
+<button class="btn btn-outline" onclick="loadGame('fidget')" style="flex-direction:column; padding:1.2rem; height:auto;"><span style="font-size:2rem; margin-bottom:0.5rem;">🌀</span> 피젯 스피너</button>
+<button class="btn btn-outline" onclick="loadGame('clicker')" style="flex-direction:column; padding:1.2rem; height:auto;"><span style="font-size:2rem; margin-bottom:0.5rem;">🖱️</span> 무한 클릭</button>
+<button class="btn btn-outline" onclick="loadGame('rain')" style="flex-direction:column; padding:1.2rem; height:auto;"><span style="font-size:2rem; margin-bottom:0.5rem;">🌧️</span> 힐링 빗소리</button>
+<button class="btn btn-outline" onclick="loadGame('color')" style="flex-direction:column; padding:1.2rem; height:auto;"><span style="font-size:2rem; margin-bottom:0.5rem;">🎨</span> 컬러 테라피</button>
+<button class="btn btn-outline" onclick="loadGame('box')" style="flex-direction:column; padding:1.2rem; height:auto;"><span style="font-size:2rem; margin-bottom:0.5rem;">📦</span> 박스 부수기</button>
+<button class="btn btn-outline" onclick="loadGame('neon')" style="flex-direction:column; padding:1.2rem; height:auto;"><span style="font-size:2rem; margin-bottom:0.5rem;">💡</span> 네온 페인팅</button>
+<button class="btn btn-outline" onclick="loadGame('ball')" style="flex-direction:column; padding:1.2rem; height:auto;"><span style="font-size:2rem; margin-bottom:0.5rem;">🎾</span> 공 튕기기</button>
+<button class="btn btn-outline" onclick="loadGame('fire')" style="flex-direction:column; padding:1.2rem; height:auto;"><span style="font-size:2rem; margin-bottom:0.5rem;">🔥</span> 장작불 멍</button>
+<button class="btn btn-outline" onclick="loadGame('breath')" style="flex-direction:column; padding:1.2rem; height:auto;"><span style="font-size:2rem; margin-bottom:0.5rem;">🧘</span> 호흡 가이드</button>
+</div>
+<div id="gameContainer" style="background:#f8fafc; border: 2px dashed var(--border); border-radius:1.5rem; min-height:450px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; touch-action:none;">
+<div style="color:var(--text-muted); text-align:center; font-weight:600;">상단 메뉴에서 게임을 선택해주세요.</div>
+</div>
+</div>
+</div>
+</main></div>
+<!-- QR 스캐너 오버레이 -->
+<div class="qr-overlay" id="qrOverlay">
+<div class="qr-video-wrap">
+<video id="qrVideo" playsinline=""></video>
+<div class="qr-scanner-line"></div>
+</div>
+<p style="margin-top:1.5rem;font-weight:700;">로또 뒷면 QR코드를 사각형 안에 맞춰주세요</p>
+<button class="btn btn-outline" onclick="stopQRScan()" style="margin-top:1rem;color:#fff;background:rgba(255,255,255,0.1)">닫기</button>
+<canvas id="qrCanvas" style="display:none;"></canvas>
+</div>
+<!-- Toast -->
+<div id="toast"></div>
+<!-- 구매 모달 -->
+<div class="modal" id="purchaseModal">
+<div class="modal-box">
+<div class="modal-title" id="modalTitle">🔐 동행복권 자동 구매</div>
+<div class="modal-desc" id="modalDesc">로그인 정보는 서버에만 전달되며 저장되지 않습니다.<br/>구매 이력은 아이디 기준으로 본 기기에 저장됩니다.</div>
+<div class="input-wrap">
+<label>아이디</label>
+<input autocomplete="username" id="modalId" placeholder="동행복권 아이디" type="text"/>
+</div>
+<div class="input-wrap">
+<label>비밀번호</label>
+<input autocomplete="current-password" id="modalPw" placeholder="비밀번호" type="password"/>
+</div>
+<div id="modalStatus"></div>
+<div class="btn-grid">
+<button class="btn btn-outline" onclick="closePurchaseModal()">취소</button>
+<button class="btn btn-primary btn-server-dep" id="modalConfirmBtn" onclick="confirmPurchase()">구매 시작</button>
+</div>
+</div>
+</div>
+<!-- 구매 성공 팝업 -->
+<div class="modal success-modal" id="successModal">
+<div class="modal-box">
+<div class="success-icon">🎉</div>
+<div class="success-title">정상구매 완료!</div>
+<div class="success-draw" id="successDrawInfo"></div>
+<div class="success-numbers" id="successNumbers"></div>
+<div class="success-time" id="successTime"></div>
+<button class="btn btn-success btn-full" onclick="closeSuccessModal()">확인</button>
+</div>
+</div>
+<script>
+    function switchNavTab(tabId) {
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        // 탭 전환 시 active 클래스 부여 로직 개선
+        const targetNav = Array.from(document.querySelectorAll('.nav-item')).find(el => el.getAttribute('onclick').includes(`'${tabId}'`));
+        if(targetNav) targetNav.classList.add('active');
+        
+        document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+        document.getElementById('view-' + tabId).classList.add('active');
+        
+        // 메인 탭으로 이동 시 뉴스 자동 동기화
+        if (tabId === 'main') {
+            fetchRealtimeNews();
+        }
+    }
+    
+    const STAT_NUMS = [1,5,11,13,17,20,24,26,27,33,34,37,39,40,43,4,10,14,18,2];
+    const API_BASE = window.location.protocol === 'file:' ? 'http://127.0.0.1:5000' : '';
+    let currentNums = [];
+    let currentDrawNo = null;
+    let currentDrawInfo = null;
+    let savedUserId = localStorage.getItem('lotto_uid') || '';
+    let savedUserPw = localStorage.getItem('lotto_upw') || '';
+    let historyRecords = [];
+
+    // ── 유틸 ──
+    function showToast(msg, dur=3000) {
+        const t = document.getElementById('toast');
+        t.innerText = msg;
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), dur);
+    }
+
+    function ballColor(n) {
+        if (n<=10) return 'c1';
+        if (n<=20) return 'c2';
+        if (n<=30) return 'c3';
+        if (n<=40) return 'c4';
+        return 'c5';
+    }
+
+    function makeBall(n, size='') {
+        return `<div class="ball ${size} ${ballColor(n)}">${n}</div>`;
+    }
+
+    // ── 번호 생성 ──
+    function generate(mode) {
+        const container = document.getElementById('predictDisplay');
+        container.innerHTML = '';
+        let pool = mode === 'auto'
+            ? Array.from({length:45},(_,i)=>i+1)
+            : [...STAT_NUMS,...STAT_NUMS,...Array.from({length:45},(_,i)=>i+1)];
+
+        const result = [];
+        while (result.length < 6) {
+            const n = pool[Math.floor(Math.random() * pool.length)];
+            if (!result.includes(n)) result.push(n);
+        }
+        result.sort((a,b)=>a-b);
+        currentNums = result;
+
+        result.forEach((n,i) => {
+            const el = document.createElement('div');
+            el.className = 'p-ball';
+            el.innerText = n;
+            container.appendChild(el);
+            setTimeout(() => el.classList.add('on'), i * 100);
+        });
+
+        addToRecent(result, mode);
+        showToast(`${mode==='auto'?'랜덤':'통계'} 번호 생성 완료`);
+    }
+
+    function addToRecent(nums, mode) {
+        const list = document.getElementById('recentList');
+        if (list.children[0]?.style.color) list.innerHTML = '';
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:6px;';
+        row.innerHTML = `<span style="font-size:.7rem;background:#e2e8f0;padding:2px 7px;border-radius:5px;font-weight:700;">${mode.toUpperCase()}</span>`;
+        nums.forEach(n => row.innerHTML += makeBall(n,'sm'));
+        list.insertBefore(row, list.firstChild);
+        if (list.children.length > 10) list.removeChild(list.lastChild);
+    }
+
+    // ── 서버 상태 ──
+    async function checkServer() {
+        try {
+            const res = await fetch(`${API_BASE}/health`);
+            if (res.ok) {
+                document.getElementById('headerStatus').innerHTML = '<span style="color:#16a34a">●</span> 서버 정상';
+                document.getElementById('headerStatus').style.color = '#16a34a';
+                document.querySelectorAll('.btn-server-dep').forEach(b => b.disabled = false);
+                return true;
+            }
+        } catch {}
+        document.getElementById('headerStatus').innerHTML = '<span style="color:#dc2626">●</span> 서버 오프라인';
+        document.getElementById('headerStatus').style.color = '#dc2626';
+        document.querySelectorAll('.btn-server-dep').forEach(b => b.disabled = true);
+        return false;
+    }
+
+    // ── 최신 당첨 결과 ──
+    async function fetchLatest() {
+        try {
+            const res = await fetch(`${API_BASE}/latest`);
+            const data = await res.json();
+            if (data.success) renderLatestDraw(data.info);
+            else document.getElementById('latestDraw').innerHTML = '<div style="color:var(--danger);text-align:center;padding:1rem;">정보를 불러올 수 없습니다</div>';
+        } catch(e) {
+            console.error('fetchLatest error:', e);
+            document.getElementById('latestDraw').innerHTML = '<div style="color:var(--danger);text-align:center;padding:1rem;">서버 오프라인</div>';
+        }
+    }
+
+    function renderLatestDraw(info) {
+        currentDrawNo = info.draw_no;
+        currentDrawInfo = info;
+        const el = document.getElementById('latestDraw');
+        let balls = info.numbers.map(n=>makeBall(n,'lg')).join('');
+        const amt = info.amount ? Number(info.amount).toLocaleString() : '-';
+        el.innerHTML = `
+            <div class="draw-meta">
+                <span class="draw-no-badge">제 ${info.draw_no}회</span>
+                &nbsp;추첨일: ${info.date}
+            </div>
+            <div class="ball-row" style="margin-bottom:1rem;">
+                ${balls}
+                <span class="plus">+</span>
+                ${makeBall(info.bonus,'lg')}
+            </div>
+            <div class="amount-grid">
+                <div class="amount-item">
+                    <div class="amount-label">1등 당첨금</div>
+                    <div class="amount-val">${amt}원</div>
+                </div>
+                <div class="amount-item">
+                    <div class="amount-label">당첨 인원</div>
+                    <div class="amount-val">${info.count}명</div>
+                </div>
+            </div>
+        `;
+        // 회차 입력란 자동 세팅
+        document.getElementById('checkDrawNo').value = info.draw_no;
+    }
+
+    // ── 당첨 번호 조회 ──
+    async function fetchDrawResult() {
+        const drawNo = parseInt(document.getElementById('checkDrawNo').value);
+        if (!drawNo) { showToast('회차를 입력해주세요'); return; }
+        try {
+            const res = await fetch(`${API_BASE}/draw?no=${drawNo}`);
+            const data = await res.json();
+            if (!data.success) { showToast(`${drawNo}회 정보를 가져올 수 없습니다`); return; }
+            const info = data.info;
+            currentDrawInfo = info;
+            document.getElementById('drawResultMeta').innerHTML =
+                `<span class="draw-no-badge">제 ${info.draw_no}회</span> 추첨일: ${info.date}`;
+            let balls = info.numbers.map(n=>makeBall(n)).join('');
+            document.getElementById('drawResultBalls').innerHTML =
+                balls + `<span class="plus">+</span>` + makeBall(info.bonus);
+            document.getElementById('drawResultArea').style.display = 'block';
+        } catch { showToast('조회 중 오류가 발생했습니다'); }
+    }
+
+    // ── 당첨 수동 확인 ──
+    async function checkWinManual() {
+        if (!currentDrawInfo) { showToast('먼저 회차를 조회해주세요'); return; }
+        const input = document.getElementById('myNumbersInput').value;
+        const nums = input.split(/[,\s]+/).map(Number).filter(n=>n>=1&&n<=45);
+        if (nums.length !== 6) { showToast('번호 6개를 올바르게 입력해주세요 (1~45)'); return; }
+
+        const payload = {
+            id: savedUserId,
+            draw_no: currentDrawInfo.draw_no,
+            numbers: nums.sort((a,b)=>a-b)
+        };
+        try {
+            const res = await fetch(`${API_BASE}/check_win`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+            const data = await res.json();
+            if (data.success) renderWinResult(data.result);
+        } catch { showToast('확인 중 오류'); }
+    }
+
+    function renderWinResult(r) {
+        const area = document.getElementById('winResultArea');
+        const rankClass = r.rank > 0 ? `win-${r.rank}` : 'win-0';
+        const matchBalls = r.my_numbers.map(n => {
+            const isMatch = r.draw_numbers.includes(n);
+            const isBonus = n === r.bonus;
+            let style = isMatch ? '' : 'opacity:.35;';
+            return `<div class="ball sm ${ballColor(n)}" style="${style}">${n}</div>`;
+        }).join('');
+        area.innerHTML = `
+            <div style="background:var(--bg);border-radius:1rem;padding:1rem;text-align:center;">
+                <div style="font-size:1.5rem;font-weight:900;margin-bottom:.4rem;">${r.label}</div>
+                <div style="font-size:.85rem;color:var(--muted);margin-bottom:.8rem;">
+                    ${r.match}개 일치 ${r.bonus_match?'(보너스 포함)':''}
+                </div>
+                <div class="ball-row" style="justify-content:center;">${matchBalls}</div>
+            </div>
+        `;
+    }
+
+    // ── 구매 이력 로드 ──
+    async function loadHistory(uid) {
+        const userIdDisplay = document.getElementById('historyUserId');
+        const historyTableBody = document.getElementById('historyBody');
+        
+        if (!uid || uid === '') {
+            if(userIdDisplay) userIdDisplay.innerText = '';
+            if(historyTableBody) {
+                historyTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:2.5rem;">🔄 공식 사이트 동기화가 필요합니다</td></tr>';
+            }
+            return;
+        }
+        
+        if(userIdDisplay) userIdDisplay.innerText = uid;
+        
+        try {
+            const res = await fetch(`${API_BASE}/history?id=${encodeURIComponent(uid)}`);
+            const data = await res.json();
+            if (data.success && data.records && data.records.length > 0) {
+                historyRecords = data.records;
+                renderHistory(data.records);
+            } else {
+                historyTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:2.5rem;">데이터가 없습니다. 동기화 버튼을 눌러주세요.</td></tr>';
+            }
+        } catch (e) {
+            historyTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:2.5rem;">⚠️ 서버 연결 오류</td></tr>';
+        }
+    }
+
+    function renderHistory(records) {
+        const tbody = document.getElementById('historyBody');
+        if (!records || records.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:2.5rem;">구매 이력이 없습니다</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = records.map(r => {
+            const balls = (r.numbers || []).map(n => `<div class="ball sm ${ballColor(n)}">${n}</div>`).join('') || '<span style="color:var(--muted);font-size:.75rem;">번호 없음</span>';
+            
+            let winBadge = '';
+            const officialResult = r.official_result || '';
+            const winResult = r.win_result || {};
+            const rank = winResult.rank;
+
+            if (officialResult === '미추첨' || rank === -1) {
+                winBadge = `<span class="win-badge" style="background:#94a3b8;color:#fff;">미추첨</span>`;
+            } else if (r.win_checked && winResult.label) {
+                const cls = rank > 0 ? `win-${rank}` : 'win-0';
+                winBadge = `<span class="win-badge ${cls}">${winResult.label}</span>`;
+            } else {
+                winBadge = `<span class="win-badge win-none">미확인</span>`;
+            }
+
+            const checkBtn = (officialResult === '미추첨') 
+                ? `<button class="check-btn" disabled style="opacity:0.5;">대기</button>` 
+                : `<button class="check-btn" onclick="checkSingleWin(${r.draw_no}, '${JSON.stringify(r.numbers).replace(/'/g, "\\'")}')">확인</button>`;
+
+            return `
+                <tr class="history-item">
+                    <td><b>${r.draw_no}회</b></td>
+                    <td><div style="display:flex;gap:4px;flex-wrap:wrap;">${balls}</div></td>
+                    <td style="font-size:0.85rem;color:var(--text-muted);">${(r.purchased_at||'').substring(0,10)}</td>
+                    <td style="font-size:0.9rem;font-weight:700;color:var(--primary);">${r.prize || '-'}</td>
+                    <td>${winBadge}</td>
+                    <td>${checkBtn}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function filterHistory() {
+        const q = document.getElementById('historySearch').value.toLowerCase();
+        const filtered = historyRecords.filter(r => 
+            String(r.draw_no).includes(q) || 
+            (r.numbers||[]).some(n => String(n) === q) ||
+            (r.purchased_at||'').includes(q)
+        );
+        renderHistory(filtered);
+    }
+
+    async function checkSingleWin(drawNo, numsStr) {
+        const nums = JSON.parse(numsStr.replace(/'/g,'"'));
+        const payload = { id: savedUserId, draw_no: drawNo, numbers: nums };
+        try {
+            const res = await fetch(`${API_BASE}/check_win`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+            const data = await res.json();
+            if (data.success) {
+                const r = data.result;
+                showToast(`${drawNo}회 ${r.label} (${r.match}개 일치)`, 4000);
+                loadHistory(savedUserId);
+            }
+        } catch { showToast('확인 중 오류'); }
+    }
+
+    async function checkAllWins() {
+        if (!savedUserId) { openSyncModal(); return; }
+        
+        // 비밀번호가 저장되어 있다면 자동으로 동기화 시도
+        if (savedUserPw) {
+            showToast('공식 사이트 정보 동기화 중...', 5000);
+            try {
+                const res = await fetch(`${API_BASE}/sync_history`, {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({id: savedUserId, pw: savedUserPw})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('동기화 완료! 당첨 결과를 확인합니다.');
+                }
+            } catch (e) {
+                console.error('Sync failed before check:', e);
+            }
+        }
+        
+        showToast('전체 당첨 확인 중...', 3000);
+        try {
+            const res = await fetch(`${API_BASE}/check_all_wins`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:savedUserId})});
+            const data = await res.json();
+            if (data.success) {
+                renderHistory(data.records);
+                showToast('당첨 확인 완료!');
+            }
+        } catch { showToast('오류 발생'); }
+    }
+
+    // ── 구매 모달 ──
+    function openPurchaseModal() {
+        // 타이틀 원복
+        document.getElementById('modalTitle').innerText = '🔐 동행복권 자동 구매';
+        document.getElementById('modalDesc').innerHTML = '로그인 정보는 본 기기에 안전하게 저장됩니다.<br>구매 시 저장된 정보를 사용하여 자동으로 진행합니다.';
+        document.getElementById('modalConfirmBtn').innerText = '구매 시작';
+        document.getElementById('modalConfirmBtn').onclick = confirmPurchase;
+
+        document.getElementById('modalId').value = savedUserId;
+        document.getElementById('modalPw').value = savedUserPw;
+
+        if (currentNums.length !== 6 && document.getElementById('modalConfirmBtn').innerText === '구매 시작') { 
+            showToast('먼저 번호를 생성해주세요'); 
+            return; 
+        }
+        document.getElementById('modalStatus').innerText = '';
+        document.getElementById('purchaseModal').classList.add('open');
+    }
+
+    function closePurchaseModal() {
+        document.getElementById('purchaseModal').classList.remove('open');
+    }
+
+    async function confirmPurchase() {
+        const uid = document.getElementById('modalId').value.trim();
+        const pw = document.getElementById('modalPw').value.trim();
+        const status = document.getElementById('modalStatus');
+        const btn = document.getElementById('modalConfirmBtn');
+
+        if (!uid || !pw) {
+            status.innerText = '아이디와 비밀번호를 입력하세요';
+            status.style.color = 'var(--danger)';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerText = '구매 진행 중...';
+        status.style.color = 'var(--primary)';
+
+        const steps = [
+            {t:0,  msg:'🌐 동행복권 접속 중...'},
+            {t:3,  msg:'🔐 로그인 처리 중...'},
+            {t:8,  msg:'🎱 게임 페이지 이동 중...'},
+            {t:13, msg:'🔢 번호 선택 중...'},
+            {t:18, msg:'🛒 구매 확정 처리 중...'},
+        ];
+        const timers = steps.map(s => setTimeout(() => { status.innerText = s.msg; }, s.t * 1000));
+
+        try {
+            const res = await fetch('/buy', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({id: uid, pw, numbers: currentNums})
+            });
+            const data = await res.json();
+            timers.forEach(t => clearTimeout(t));
+
+            if (data.success) {
+                // 로그인 정보 저장
+                savedUserId = uid;
+                savedUserPw = pw;
+                localStorage.setItem('lotto_uid', uid);
+                localStorage.setItem('lotto_upw', pw);
+
+                closePurchaseModal();
+                showSuccessPopup(data);
+                loadHistory(uid);
+            } else {
+                status.innerText = '❌ ' + data.message;
+                status.style.color = 'var(--danger)';
+            }
+        } catch {
+            timers.forEach(t => clearTimeout(t));
+            status.innerText = '⚠️ 서버 연결 오류';
+            status.style.color = 'var(--danger)';
+        } finally {
+            btn.disabled = false;
+            btn.innerText = '구매 시작';
+        }
+    }
+
+    // ── 구매 성공 팝업 ──
+    function showSuccessPopup(data) {
+        document.getElementById('successDrawInfo').innerText = `제 ${data.draw_no}회 로또 6/45`;
+        const numsEl = document.getElementById('successNumbers');
+        numsEl.innerHTML = data.numbers.map(n=>makeBall(n,'lg')).join('');
+        document.getElementById('successTime').innerText = `구매 완료: ${data.purchased_at}`;
+        document.getElementById('successModal').classList.add('open');
+    }
+
+    function closeSuccessModal() {
+        document.getElementById('successModal').classList.remove('open');
+    }
+
+    // ── 동기화 ──
+    function openSyncModal() {
+        openPurchaseModal();
+        document.getElementById('modalTitle').innerText = '🔄 공식 사이트 동기화';
+        document.getElementById('modalDesc').innerText = '마이페이지의 구매/당첨 내역을 불러옵니다.';
+        document.getElementById('modalConfirmBtn').innerText = '동기화 시작';
+        document.getElementById('modalConfirmBtn').onclick = syncHistory;
+    }
+
+    async function syncHistory() {
+        const uid = document.getElementById('modalId').value.trim();
+        const pw = document.getElementById('modalPw').value.trim();
+        const status = document.getElementById('modalStatus');
+        const btn = document.getElementById('modalConfirmBtn');
+
+        if (!uid || !pw) { status.innerText = '정보를 입력하세요'; return; }
+        btn.disabled = true; btn.innerText = '동기화 중...';
+        status.innerText = '🌐 공식 사이트 연결 중...';
+        
+        try {
+            const res = await fetch(`${API_BASE}/sync_history`, {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({id: uid, pw})
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast(data.message);
+                savedUserId = uid;
+                savedUserPw = pw;
+                localStorage.setItem('lotto_uid', uid);
+                localStorage.setItem('lotto_upw', pw);
+                closePurchaseModal();
+                loadHistory(uid);
+                // 동기화 완료 후 지갑 잔액 자동 조회
+                setTimeout(syncWalletBalance, 800);
+            } else {
+                status.innerText = '❌ ' + (data.message || '동기화 실패');
+                status.style.color = 'var(--danger)';
+            }
+        } catch(e) { 
+            status.innerText = '⚠️ 서버 연결 오류: ' + (e.message === 'Failed to fetch' ? '서버가 구동 중인지 확인하세요' : e.message); 
+            status.style.color = 'var(--danger)';
+        }
+        finally { btn.disabled = false; btn.innerText = '동기화 시작'; }
+    }
+
+    // ── QR 스캔 ──
+    let qrScannerActive = false;
+    let videoStream = null;
+
+    async function startQRScan() {
+        const overlay = document.getElementById('qrOverlay');
+        const video = document.getElementById('qrVideo');
+        overlay.classList.add('open');
+        qrScannerActive = true;
+
+        try {
+            videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            video.srcObject = videoStream;
+            video.setAttribute('playsinline', true);
+            video.play();
+            requestAnimationFrame(scanBatch);
+        } catch (e) {
+            showToast('카메라 권한이 필요합니다');
+            stopQRScan();
+        }
+    }
+
+    function stopQRScan() {
+        qrScannerActive = false;
+        if (videoStream) {
+            videoStream.getTracks().forEach(track => track.stop());
+        }
+        document.getElementById('qrOverlay').classList.remove('open');
+    }
+
+    function scanBatch() {
+        if (!qrScannerActive) return;
+        const video = document.getElementById('qrVideo');
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            const canvas = document.getElementById('qrCanvas');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            canvas.height = video.videoHeight;
+            canvas.width = video.videoWidth;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+
+            if (code && code.data.includes('dhlottery')) {
+                handleQRResult(code.data);
+                return;
+            }
+        }
+        requestAnimationFrame(scanBatch);
+    }
+
+    async function handleQRResult(url) {
+        stopQRScan();
+        // https://m.dhlottery.co.kr/?v=0868m041118223845m051419313445...
+        const v = new URL(url).searchParams.get('v');
+        if (!v) { showToast('올바른 로또 QR이 아닙니다'); return; }
+
+        const draw_no = parseInt(v.substring(0, 4));
+        const numbers_list = [];
+        const lines = v.substring(4).split('m').filter(x => x.length >= 12);
+        
+        lines.forEach(line => {
+            const nums = [];
+            for (let i=0; i<12; i+=2) {
+                nums.push(parseInt(line.substring(i, i+2)));
+            }
+            numbers_list.push(nums);
+        });
+
+        if (!savedUserId) {
+            const uid = prompt('이동 번호를 저장할 아이디를 입력하세요');
+            if (uid) { savedUserId = uid; localStorage.setItem('lotto_uid', uid); }
+            else return;
+        }
+
+        try {
+            const res = await fetch('/add_qr_record', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({id: savedUserId, draw_no, numbers_list})
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast(data.message);
+                loadHistory(savedUserId);
+            }
+        } catch { showToast('등록 중 오류'); }
+    }
+
+    // ESC 키 모달 닫기
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') {
+            closePurchaseModal();
+            closeSuccessModal();
+        }
+    });
+
+    function deleteAccount() {
+        if (confirm('저장된 계정 정보와 구매 이력을 삭제하시겠습니까?')) {
+            localStorage.clear();
+            location.reload();
+        }
+    }
+
+    // ── 초기화 ──
+    window.onload = async () => {
+        await checkServer();
+        await fetchLatest();   // 최신 당첨 결과 먼저 로드
+        generate('auto');
+
+        if (savedUserId) {
+            document.getElementById('historyUserId').innerText = savedUserId;
+            // 보안을 위해 페이지 로드 시 이력을 자동으로 불러오지 않습니다.
+            renderHistory([]); 
+        }
+
+        setInterval(checkServer, 5000);
+        setInterval(fetchLatest, 60000); // 1분마다 최신 결과 갱신
+        fetchRealtimeNews();
+        setInterval(fetchRealtimeNews, 600000); // 10분마다 뉴스 갱신
+    };
+    
+    // ==== 로또 분석 실행 ====
+    function executeAnalysis() {
+        const btn = document.getElementById('analysisBtn');
+        const period = document.getElementById('analysisPeriod').value;
+        const type = document.getElementById('analysisType').value;
+        
+        btn.disabled = true;
+        btn.innerHTML = '진행 중...';
+        
+        let freqHtml = '';
+        setTimeout(() => {
+            if (period === '1year' || period === 'all') {
+                freqHtml = `
+                    <div class="stat-card"><div class="stat-title">1위 번호 (출현 82회)</div><div class="ball c4" style="margin: 0 auto; box-shadow: 0 0 15px rgba(156,163,175, 0.5);">34</div></div>
+                    <div class="stat-card"><div class="stat-title">2위 번호 (출현 75회)</div><div class="ball c2" style="margin: 0 auto;">18</div></div>
+                    <div class="stat-card"><div class="stat-title">3위 번호 (출현 71회)</div><div class="ball c3" style="margin: 0 auto;">27</div></div>
+                `;
+            } else {
+                freqHtml = `
+                    <div class="stat-card"><div class="stat-title">1위 번호 (출현 14회)</div><div class="ball c1" style="margin: 0 auto; box-shadow: 0 0 15px rgba(251,191,36, 0.5);">3</div></div>
+                    <div class="stat-card"><div class="stat-title">2위 번호 (출현 11회)</div><div class="ball c5" style="margin: 0 auto;">45</div></div>
+                    <div class="stat-card"><div class="stat-title">3위 번호 (출현 10회)</div><div class="ball c2" style="margin: 0 auto;">12</div></div>
+                `;
+            }
+            document.getElementById('freqStats').innerHTML = freqHtml;
+            btn.innerHTML = '🔍 분석 완료';
+            setTimeout(() => { btn.disabled = false; btn.innerHTML = '🔍 분석 실행'; }, 2000);
+            showToast('데이터 분석이 완료되었습니다.');
+        }, 1000);
+    }
+
+    // ==== 유튜브 검색 및 필터 ====
+    const ytMockData = {
+        '재미': [
+            { id: '1', title: '역대급 꿀잼 숏츠 모음집', channel: '재밍유튜브', type: 'shorts' },
+            { id: '2', title: '강아지 웃긴 영상 레전드', channel: '애견일기' },
+            { id: '3', title: '예능 레전드 모음 다시보기', channel: '예능저장소' }
+        ],
+        '음악': [
+            { id: '4', title: '2026 빌보드 탑 100 플레이리스트', channel: 'Music Box' },
+            { id: '5', title: '카페에서 듣기 좋은 재즈 & 팝', channel: 'Cafe Vibes' },
+            { id: '6', title: '노동요 신나는 K-POP 믹스', channel: '아이돌라디오' }
+        ],
+        '뉴스': [
+            { id: '7', title: '[속보] 글로벌 경제 위기 극복되나', channel: '경제뉴스TV' },
+            { id: '8', title: '오늘의 주요 사건/사고 종합', channel: '하루뉴스' },
+            { id: '9', title: '부동산 정책 전면 개편 요약', channel: '리얼스토리' }
+        ]
+    };
+
+    function renderYoutube(videos) {
+        const grid = document.getElementById('ytVideoGrid');
+        if (!videos || videos.length === 0) {
+            grid.innerHTML = '<div style="color:var(--text-muted); text-align:center; grid-column: 1 / -1; padding: 2rem;">검색 결과가 없습니다.</div>';
+            return;
+        }
+        
+        let html = '';
+        videos.forEach(v => {
+            const ratio = v.type === 'shorts' ? '9/16' : '16/9';
+            html += `
+                <div style="display:flex; flex-direction:column; gap:0.5rem; cursor:pointer;" onclick="window.open('https://youtube.com/results?search_query=${encodeURIComponent(v.title)}', '_blank')">
+                    <div style="background:#E2E8F0; border-radius:1rem; aspect-ratio:${ratio}; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; border: 1px solid var(--border);">
+                        <span style="font-size:3rem; color: #DC2626;">▶</span>
+                        <div style="position:absolute; bottom:0.5rem; right:0.5rem; background:rgba(0,0,0,0.8); color:#fff; padding:0.2rem 0.6rem; border-radius:0.4rem; font-size:0.75rem; font-weight:700;">10:24</div>
+                    </div>
+                    <h4 style="font-size:1rem; font-weight:700; color:var(--text-main); margin-top:0.3rem;">${v.title}</h4>
+                    <p style="font-size:0.85rem; color:var(--text-muted);">${v.channel} • 조회수 10만회</p>
+                </div>
+            `;
+        });
+        grid.innerHTML = html;
+    }
+
+    function filterYoutube(category) {
+        renderYoutube(ytMockData[category] || []);
+    }
+    
+    function searchYoutube(e) {
+        if (e.key === 'Enter') {
+            const q = document.getElementById('ytSearch').value;
+            if(!q) return;
+            // Mock search query
+            renderYoutube([
+                { id: 'search1', title: `'${q}' 최신 리뷰 영상`, channel: '테크튜브' },
+                { id: 'search2', title: `'${q}' 완벽 정리 분석`, channel: '인사이트' }
+            ]);
+        }
+    }
+    
+    // Default load Main Tab
+    // document.addEventListener("DOMContentLoaded", () => { switchNavTab('main'); });
+
+    // ==== 추가된 로또 분석 로직 ====
+    // 1~6위 빈도 재렌더링
+    const originalExecuteAnalysis = executeAnalysis;
+    executeAnalysis = function() {
+        const btn = document.getElementById('analysisBtn');
+        const period = document.getElementById('analysisPeriod').value;
+        const type = document.getElementById('analysisType').value;
+        
+        btn.disabled = true;
+        btn.innerHTML = '진행 중...';
+        
+        let freqHtml = '';
+        setTimeout(() => {
+            if (period === '1year' || period === 'all') {
+                freqHtml = `
+                    <div class="stat-card"><div class="stat-title">1위 번호 (출현 82회)</div><div class="ball c4" style="margin: 0 auto;">34</div></div>
+                    <div class="stat-card"><div class="stat-title">2위 번호 (출현 75회)</div><div class="ball c2" style="margin: 0 auto;">18</div></div>
+                    <div class="stat-card"><div class="stat-title">3위 번호 (출현 71회)</div><div class="ball c3" style="margin: 0 auto;">27</div></div>
+                    <div class="stat-card"><div class="stat-title">4위 번호 (출현 68회)</div><div class="ball c1" style="margin: 0 auto;">5</div></div>
+                    <div class="stat-card"><div class="stat-title">5위 번호 (출현 65회)</div><div class="ball c5" style="margin: 0 auto;">42</div></div>
+                    <div class="stat-card"><div class="stat-title">6위 번호 (출현 61회)</div><div class="ball c2" style="margin: 0 auto;">11</div></div>
+                `;
+            } else {
+                freqHtml = `
+                    <div class="stat-card"><div class="stat-title">1위 (출현 14회)</div><div class="ball c1" style="margin: 0 auto;">3</div></div>
+                    <div class="stat-card"><div class="stat-title">2위 (출현 11회)</div><div class="ball c5" style="margin: 0 auto;">45</div></div>
+                    <div class="stat-card"><div class="stat-title">3위 (출현 10회)</div><div class="ball c2" style="margin: 0 auto;">12</div></div>
+                    <div class="stat-card"><div class="stat-title">4위 (출현 9회)</div><div class="ball c3" style="margin: 0 auto;">26</div></div>
+                    <div class="stat-card"><div class="stat-title">5위 (출현 8회)</div><div class="ball c4" style="margin: 0 auto;">31</div></div>
+                    <div class="stat-card"><div class="stat-title">6위 (출현 7회)</div><div class="ball c1" style="margin: 0 auto;">7</div></div>
+                `;
+            }
+            document.getElementById('freqStats').innerHTML = freqHtml;
+            btn.innerHTML = '🔍 분석 완료';
+            setTimeout(() => { btn.disabled = false; btn.innerHTML = '🔍 분석 실행'; }, 2000);
+            showToast('Top 6 번호 데이터 분석이 완료되었습니다.');
+        }, 1000);
+    };
+
+    let optimalNumbersGlobal = [];
+
+    function extractOptimalNumbers() {
+        const p = document.getElementById('optPeriod').value;
+        const m = document.getElementById('optMonth').value;
+        const o = document.getElementById('optOddEven').value;
+        const mt = document.getElementById('optMethod').value;
+        
+        // Mock generation based on options
+        let nums = [];
+        while(nums.length < 6) {
+            let r = Math.floor(Math.random() * 45) + 1;
+            if(!nums.includes(r)) nums.push(r);
+        }
+        nums.sort((a,b) => a-b);
+        optimalNumbersGlobal = nums;
+        
+        const area = document.getElementById('optimalResultArea');
+        const ballsDiv = document.getElementById('optimalBalls');
+        
+        let ballsHtml = '';
+        nums.forEach(n => {
+            let colorCls = n <= 10 ? 'c1' : n <= 20 ? 'c2' : n <= 30 ? 'c3' : n <= 40 ? 'c4' : 'c5';
+            ballsHtml += `<div class="p-ball on ${colorCls} lg">${n}</div>`;
+        });
+        
+        ballsDiv.innerHTML = ballsHtml;
+        area.style.display = 'block';
+        showToast('조건에 맞는 최적 번호가 추출되었습니다!');
+    }
+
+    function sendToMainAI() {
+        if(!window.optimalNumbersGlobal || window.optimalNumbersGlobal.length !== 6) {
+            showToast('추출된 번호가 없습니다.');
+            return;
+        }
+        
+        const nums = [...window.optimalNumbersGlobal];
+        
+        // 메인 탭으로 이동
+        switchNavTab('main');
+        
+        // 글로벌 변수들 업데이트
+        window.predictedNumbers = nums;
+        currentNums = nums; // 실제 구매 시 사용되는 변수
+        
+        // 화면 랜더링 애니메이션
+        const panel = document.getElementById('predictDisplay');
+        panel.innerHTML = '';
+        
+        nums.forEach((n, i) => {
+            setTimeout(() => {
+                const ball = document.createElement('div');
+                ball.className = `p-ball ${ballColor(n)}`;
+                ball.innerText = n;
+                panel.appendChild(ball);
+                setTimeout(() => ball.classList.add('on'), 50);
+            }, i * 120);
+        });
+        
+        document.getElementById('purchaseBtn').disabled = false;
+        showToast('🎯 최적 분석 번호가 AI 단말로 연계되었습니다.');
+    }
+
+    function applyManualNumbers() {
+        const input = document.getElementById('manualNumbers').value;
+        const err = document.getElementById('manualError');
+        err.style.display = 'none';
+        
+        let parts = input.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 45);
+        // Deduplicate
+        parts = [...new Set(parts)];
+        
+        if (parts.length !== 6) {
+            err.style.display = 'block';
+            return;
+        }
+        
+        parts.sort((a,b) => a-b);
+        window.predictedNumbers = parts;
+        
+        const panel = document.getElementById('predictDisplay');
+        panel.innerHTML = '';
+        parts.forEach((n, i) => {
+            setTimeout(() => {
+                let colorCls = n <= 10 ? 'c1' : n <= 20 ? 'c2' : n <= 30 ? 'c3' : n <= 40 ? 'c4' : 'c5';
+                const ball = document.createElement('div');
+                ball.className = `p-ball ${colorCls}`;
+                ball.innerText = n;
+                panel.appendChild(ball);
+                setTimeout(() => ball.classList.add('on'), 50);
+            }, i * 150);
+        });
+        
+        document.getElementById('purchaseBtn').disabled = false;
+        showToast('수동 번호가 입력되었습니다.');
+    }
+
+    async function fetchRealtimeNews() {
+        const container = document.getElementById('lottoNewsContainer');
+        if (!container) return;
+
+        // 검색 중 피드백 연출
+        container.innerHTML = `
+            <div style="text-align:center; padding: 1.5rem; color: var(--text-muted); font-size: 0.85rem; background: rgba(255,255,255,0.2); border-radius: 1rem;">
+                <div class="ai-pulse" style="width:20px; height:20px; background:var(--primary); border-radius:50%; margin: 0 auto 0.8rem;"></div>
+                📡 구글 실시간 로또 정보를 분석 중입니다...
+            </div>
+        `;
+
+        try {
+            const res = await fetch(`${API_BASE}/news`);
+            const data = await res.json();
+            
+            if (data.success && data.news && data.news.length > 0) {
+                let html = '';
+                // 상위 3개만 표시
+                data.news.forEach((item, idx) => {
+                    if (idx >= 3) return;
+                    html += `
+                        <a class="btn-link" href="${item.link}" target="_blank" 
+                           style="justify-content: flex-start; border-radius: 0.8rem; background: rgba(255,255,255,0.4); border: 1px solid var(--border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0.8rem 1rem;">
+                            <span style="overflow: hidden; text-overflow: ellipsis; font-size: 0.85rem; font-weight: 600; color: var(--text-main);">${item.title}</span>
+                        </a>
+                    `;
+                });
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<div style="text-align:center; padding: 1rem; color: var(--text-muted); font-size: 0.85rem;">실시간 뉴스를 가져오지 못했습니다. <br>(구글 뉴스 탭을 확인해 주세요)</div>';
+            }
+        } catch(e) {
+            console.error('News fetch error:', e);
+            container.innerHTML = '<div style="text-align:center; padding: 1rem; color: var(--text-muted); font-size: 0.85rem;">서버와의 동동기화가 지연되고 있습니다.</div>';
+        }
+    }
+</script>
+<div class="modal" id="manualPickerModal">
+<div class="modal-box" style="max-width: 500px;">
+<div class="modal-title">✍️ 수동 번호 선택 (6개)</div>
+<p class="modal-desc">원하시는 번호 6개를 클릭해주세요.</p>
+<div id="pickerGrid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin: 1.5rem 0;">
+</div>
+<div class="ball-row" id="selectedDisplay" style="justify-content: center; margin-bottom: 1.5rem; min-height: 46px;"></div>
+<div class="btn-grid">
+<button class="btn btn-outline" onclick="closeManualPicker()">취소</button>
+<button class="btn btn-primary" disabled="" id="confirmManualBtn" onclick="confirmManualSelection()">선택 완료</button>
+</div>
+</div>
+</div>
+<script>
+    // --- 5초 로딩 추출 시뮬레이션 ---
+    function extractOptimalNumbers() {
+        const btn = document.querySelector('#view-lotto button.btn-primary');
+        const resultArea = document.getElementById('optimalResultArea');
+        const ballsDiv = document.getElementById('optimalBalls');
+        
+        btn.disabled = true;
+        btn.classList.add('loading-active');
+        btn.innerHTML = '🧬 신경망 가중치 최적화 중...';
+        
+        resultArea.style.display = 'block';
+        
+        const aiLogs = [
+            '📡 10개년 당첨 패턴 클러스터링 중...',
+            '📉 회차별 출현 빈도 가중치 계산...',
+            '🔍 미출현 번호(Long-term) 확률 보정...',
+            '💾 최적 조합 알고리즘(GA) 구동...',
+            '✨ 결과 도출 완료 (Confidence: 98.4%)'
+        ];
+        
+        ballsDiv.innerHTML = `<div style="width:100%; color:var(--text-muted); padding:2.5rem; font-weight:600;">
+            <div id="aiLogText" style="font-family: monospace; font-size: 0.9rem; margin-bottom:1rem; color: var(--primary);"></div>
+            <span id="loadingTimer" style="font-size:1.5rem; color:var(--primary); font-weight:800;">5</span>s
+        </div>`;
+        
+        let count = 5;
+        const logEl = document.getElementById('aiLogText');
+        
+        const timer = setInterval(() => {
+            count--;
+            const timerEl = document.getElementById('loadingTimer');
+            if(timerEl) timerEl.innerText = count;
+            if(logEl) logEl.innerText = aiLogs[5-count-1] || aiLogs[aiLogs.length-1];
+            
+            if(count <= 0) {
+                clearInterval(timer);
+                finishExtraction(btn, resultArea, ballsDiv);
+            }
+        }, 1000);
+        logEl.innerText = aiLogs[0];
+    }
+
+    function finishExtraction(btn, area, ballsDiv) {
+        btn.disabled = false;
+        btn.classList.remove('loading-active');
+        btn.innerHTML = '✨ 조건에 맞는 최적 번호 추출하기';
+        
+        let nums = [];
+        while(nums.length < 6) {
+            let r = Math.floor(Math.random() * 45) + 1;
+            if(!nums.includes(r)) nums.push(r);
+        }
+        nums.sort((a,b) => a-b);
+        window.optimalNumbersGlobal = nums;
+        
+        ballsDiv.innerHTML = '';
+        nums.forEach((n, i) => {
+            setTimeout(() => {
+                let colorCls = n <= 10 ? 'c1' : n <= 20 ? 'c2' : n <= 30 ? 'c3' : n <= 40 ? 'c4' : 'c5';
+                const ball = document.createElement('div');
+                ball.className = `p-ball on ${colorCls} lg`;
+                ball.innerText = n;
+                ball.style.animation = 'bounce 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                ballsDiv.appendChild(ball);
+                if(i === 5) showToast('✨ AI 최적 번호 추출이 완료되었습니다!');
+            }, i * 150);
+        });
+    }
+
+    // --- 수동 번호 피크 모달 로직 ---
+    let selectedManual = [];
+
+    function openManualPicker() {
+        selectedManual = [];
+        const grid = document.getElementById('pickerGrid');
+        grid.innerHTML = '';
+        for(let i=1; i<=45; i++) {
+            const ball = document.createElement('div');
+            ball.className = 'picker-ball';
+            ball.innerText = i;
+            ball.onclick = (e) => togglePickerNumber(i, e.target);
+            grid.appendChild(ball);
+        }
+        updatePickerUI();
+        document.getElementById('manualPickerModal').classList.add('open');
+    }
+
+    function closeManualPicker() {
+        document.getElementById('manualPickerModal').classList.remove('open');
+    }
+
+    function togglePickerNumber(num, el) {
+        if(selectedManual.includes(num)) {
+            selectedManual = selectedManual.filter(n => n !== num);
+            el.classList.remove('selected');
+        } else {
+            if(selectedManual.length >= 6) {
+                showToast('최대 6개까지만 선택 가능합니다.');
+                return;
+            }
+            selectedManual.push(num);
+            el.classList.add('selected');
+        }
+        updatePickerUI();
+    }
+
+    function updatePickerUI() {
+        const display = document.getElementById('selectedDisplay');
+        const btn = document.getElementById('confirmManualBtn');
+        
+        const sorted = [...selectedManual].sort((a,b) => a-b);
+        display.innerHTML = sorted.map(n => {
+            let colorCls = n <= 10 ? 'c1' : n <= 20 ? 'c2' : n <= 30 ? 'c3' : n <= 40 ? 'c4' : 'c5';
+            return `<div class="ball sm ${colorCls}">${n}</div>`;
+        }).join('');
+        
+        btn.disabled = selectedManual.length !== 6;
+        btn.innerHTML = selectedManual.length === 6 ? '선택 완료' : `${selectedManual.length}/6 선택중`;
+    }
+
+    function confirmManualSelection() {
+        window.predictedNumbers = selectedManual.sort((a,b) => a-b);
+        const panel = document.getElementById('predictDisplay');
+        panel.innerHTML = '';
+        window.predictedNumbers.forEach((n, i) => {
+            setTimeout(() => {
+                let colorCls = n <= 10 ? 'c1' : n <= 20 ? 'c2' : n <= 30 ? 'c3' : n <= 40 ? 'c4' : 'c5';
+                const ball = document.createElement('div');
+                ball.className = 'p-ball';
+                ball.innerText = n;
+                panel.appendChild(ball);
+                setTimeout(() => ball.classList.add('on'), 50);
+            }, i * 100);
+        });
+        document.getElementById('purchaseBtn').disabled = false;
+        closeManualPicker();
+        showToast('수동 번호 선택이 완료되어 AI 분석기에 반영되었습니다.');
+    }
+</script><script>
+    function loadGame(gameId) {
+        const container = document.getElementById('gameContainer');
+        container.innerHTML = '';
+        container.style.background = '#f8fafc';
+        
+        switch(gameId) {
+            case 'bubble':
+                container.innerHTML = '<div style="padding:1rem; text-align:center; position:absolute; top:0; z-index:10; font-weight:700; color:var(--primary);">버블을 마구 터뜨리세요! 🫧</div>';
+                for(let i=0; i<35; i++) createBubble();
+                break;
+            case 'fidget':
+                container.innerHTML = '<div style="text-align:center;"><div id="spinner" style="font-size:10rem; transition: transform 0.15s ease-out; cursor:pointer; user-select:none;" onclick="spin()">🌀</div><p style="margin-top:2rem; font-weight:700;">스피너를 클릭해서 쌩쌩 돌리세요!</p></div>';
+                window.spinDeg = 0;
+                break;
+            case 'clicker':
+                window.clickCount = 0;
+                container.innerHTML = `<div style="text-align:center;"><div id="cCount" style="font-size:5rem; font-weight:900; color:var(--primary); margin-bottom:1rem;">0</div><button class="btn btn-primary" style="font-size:2rem; padding:2rem 4rem; border-radius:3rem; box-shadow:0 10px 30px rgba(79,70,229,0.3);" onclick="hitClicker()">CLICK!</button><p style="margin-top:2rem; color:var(--text-muted);">무념무상 클릭하며 잡념을 날리세요</p></div>`;
+                break;
+            case 'breath':
+                container.innerHTML = '<div style="text-align:center;"><div id="breathBall" style="width:100px; height:100px; background:var(--primary-light); border-radius:50%; margin: 0 auto; transition: all 4s ease-in-out; opacity:0.6; box-shadow:0 0 50px var(--primary-light);"></div><h2 id="bText" style="margin-top:3rem; color:var(--primary); font-weight:800;">숨을 들이마시세요...</h2></div>';
+                runBreath();
+                break;
+            case 'color':
+                container.innerHTML = '<div style="display:grid; grid-template-columns: repeat(5, 1fr); gap:12px; padding:25px; width:100%; height:100%; box-sizing:border-box;">' + 
+                    Array(25).fill(0).map(() => `<div style="background:hsl(${Math.random()*360}, 70%, 60%); border-radius:15px; cursor:pointer; transition:all 0.3s;" onclick="this.style.background=\'hsl(\'+Math.random()*360+\', 70%, 50%)\'"></div>`).join('') + '</div>';
+                break;
+            case 'box':
+                container.innerHTML = '<div style="padding:1rem; position:absolute; top:0; font-weight:700; color:var(--danger);">박스를 조각조각 부수세요! 📦</div>';
+                for(let i=0; i<18; i++) createBox();
+                break;
+            case 'fire':
+                container.style.background = '#0f172a';
+                container.innerHTML = '<div style="text-align:center;"><span style="font-size:7rem; display:block; animation: flicker 1s infinite alternate;">🔥</span><h2 style="color:#f97316; margin-top:2rem;">장작 타는 소리에 집중하며 불멍...</h2><p style="color:#64748b; margin-top:1rem;">마음의 평화를 찾으세요.</p></div>';
+                break;
+            case 'rain':
+                container.style.background = '#1e293b';
+                container.innerHTML = '<div style="text-align:center;"><span style="font-size:6rem; display:block; filter: drop-shadow(0 0 20px #3b82f6);">🌧️</span><h2 style="color:#60a5fa; margin-top:2rem;">토닥토닥 빗소리 힐링...</h2></div>';
+                break;
+            default:
+                container.innerHTML = '<div style="text-align:center; padding:2rem;"><span style="font-size:4rem;">🚧</span><h2 style="margin-top:1.5rem;">곧 공개될 게임입니다!</h2></div>';
+        }
+    }
+    function createBubble() {
+        const container = document.getElementById('gameContainer');
+        if(!container || !container.innerHTML.includes('버블')) return;
+        const b = document.createElement('div');
+        const size = Math.random() * 40 + 30;
+        b.className = 'picker-ball';
+        b.style.cssText = `position:absolute; width:${size}px; height:${size}px; background:rgba(147,197,253,0.3); border:2px solid #fff; left:${Math.random()*90}%; top:${Math.random()*85}%; transition:all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);`;
+        b.onclick = () => { 
+            b.style.transform = 'scale(2.5)'; 
+            b.style.opacity = '0'; 
+            b.innerHTML = '✨';
+            setTimeout(() => { b.remove(); createBubble(); }, 250); 
+        };
+        container.appendChild(b);
+    }
+    function spin() { 
+        window.spinDeg += 120; 
+        document.getElementById('spinner').style.transform = `rotate(${window.spinDeg}deg)`; 
+    }
+    function hitClicker() { 
+        window.clickCount++; 
+        document.getElementById('cCount').innerText = window.clickCount; 
+        const btn = event.currentTarget;
+        btn.style.transform = 'scale(0.95)';
+        setTimeout(() => btn.style.transform = 'scale(1)', 50);
+    }
+    function createBox() {
+        const container = document.getElementById('gameContainer');
+        if(!container || !container.innerHTML.includes('박스')) return;
+        const b = document.createElement('div');
+        b.style.cssText = `position:absolute; width:70px; height:70px; background:#d97706; border-radius:12px; left:${Math.random()*85}%; top:${Math.random()*80}%; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:1.8rem; box-shadow:0 4px 0 #92400e; transition:all 0.1s;`;
+        b.innerText = '📦';
+        b.onclick = () => { 
+            b.innerText = '💥'; 
+            b.style.background = '#ef4444'; 
+            b.style.transform = 'scale(1.2)';
+            setTimeout(() => { b.remove(); createBox(); }, 300); 
+        };
+        container.appendChild(b);
+    }
+    function runBreath() {
+        const ball = document.getElementById('breathBall');
+        const text = document.getElementById('bText');
+        if(!ball) return;
+        ball.style.transform = 'scale(2.6)';
+        ball.style.opacity = '0.9';
+        text.innerText = '숨을 깊게 들이마시세요...';
+        setTimeout(() => {
+            if(!ball) return;
+            ball.style.transform = 'scale(1)';
+            ball.style.opacity = '0.4';
+            text.innerText = '천천히 내뱉으세요...';
+            setTimeout(runBreath, 4000);
+        }, 4000);
+    }
+
+    // --- 예치금 관리 기능 ---
+    let currentWalletBalance = parseInt(localStorage.getItem('lotto_wallet')) || 0;
+    let virtualAccount = localStorage.getItem('lotto_v_acc') || '';
+
+    function updateWalletUI() {
+        const el = document.getElementById('walletBalance');
+        if(el) el.innerText = currentWalletBalance.toLocaleString();
+        
+        const accEl = document.getElementById('virtualAccountInfo');
+        if(virtualAccount) {
+            accEl.style.display = 'block';
+            accEl.innerText = `${virtualAccount}`;
+        }
+    }
+
+    function chargeWallet(amount) {
+        if(virtualAccount) {
+            if(confirm(`${amount.toLocaleString()}원을 충전하시겠습니까?\n아래 발급된 가상계좌로 직접 입금해야 완료됩니다.\n\n[ ${virtualAccount} ]\n\n확인을 누르시면 계좌번호가 복사되며\n충전 안내 페이지로 이동합니다.`)) {
+                openChargeLink();
+            }
+        } else {
+            currentWalletBalance += amount;
+            localStorage.setItem('lotto_wallet', currentWalletBalance);
+            updateWalletUI();
+            showToast(`${amount.toLocaleString()}원 자동 플러스 적용 완료!`, 3000);
+            
+            setTimeout(() => {
+                if(confirm(`[가상 충전] ${amount.toLocaleString()}원이 잔액에 플러스 되었습니다.\n\n실제로 동행복권 사이트에서 예치금을 결제(충전)하시겠습니까?\n(확인 시 동행복권 충전 페이지로 이동합니다)`)) {
+                    openChargeLink();
+                }
+            }, 600);
+        }
+    }
+
+    function openChargeLink() {
+        if(virtualAccount) {
+            const accNum = virtualAccount.replace(/[^0-9-]/g, '');
+            if(accNum && navigator.clipboard) {
+                navigator.clipboard.writeText(accNum).catch(()=>{});
+                showToast('계좌번호가 복사되었습니다. 보안 충전 창이 열립니다!', 3000);
+            }
+        }
+        
+        if(savedUserId && savedUserPw) {
+            // 커스텀 API 라우트(자동로그인 미들웨어)를 팝업으로 직접 연결
+            const autoLoginUrl = `${API_BASE}/auto_charge_popup?id=${encodeURIComponent(savedUserId)}&pw=${encodeURIComponent(savedUserPw)}`;
+            window.open(autoLoginUrl, 'dhChargePopup', 'width=650,height=800,scrollbars=yes,resizable=yes,top=100,left=100');
+        } else {
+            window.open('https://dhlottery.co.kr/userSlogin.do?method=latelyReady', 'dhChargePopup', 'width=650,height=800,scrollbars=yes,resizable=yes,top=100,left=100');
+        }
+    }
+
+    async function syncWalletBalance() {
+        if (!savedUserId || !savedUserPw) {
+            showToast('로터리 계정 정보가 없습니다. 구매/당첨 내역을 먼저 동기화해주세요.', 4000);
+            return;
+        }
+        
+        const statusEl = document.getElementById('walletSyncStatus');
+        statusEl.innerHTML = '🔄 잔액 정보 스크래핑 중...';
+        statusEl.style.color = 'var(--primary)';
+        
+        try {
+            const res = await fetch(`${API_BASE}/api/balance`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: savedUserId, pw: savedUserPw })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                currentWalletBalance = data.balance;
+                virtualAccount = data.account || '';
+                localStorage.setItem('lotto_wallet', currentWalletBalance);
+                if(virtualAccount) localStorage.setItem('lotto_v_acc', virtualAccount);
+                
+                updateWalletUI();
+                showToast('✨ 동행복권 예치금 및 계좌 정보가 최신화되었습니다. ✨');
+            } else {
+                showToast(`예치금 연동 실패: ${data.message}`, 4000);
+            }
+        } catch(e) {
+            showToast(`통신 지연: 서버를 재시작해 주세요.`);
+        } finally {
+            statusEl.innerHTML = '🔄 잔액 새로고침';
+            statusEl.style.color = 'var(--text-muted)';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        updateWalletUI();
+    });
+    </script></body>
+</html>
