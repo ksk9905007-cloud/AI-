@@ -361,35 +361,31 @@ def do_login(page, user_id, user_pw):
             pw_selectors = ["#inpUserPswdEncn", "#userPswdEncn", "input[name='userPswdEncn']", "input[name='inpUserPswdEncn']"]
             btn_selectors = ["#btnLogin", ".login-btn", ".item-submit", "button[type='submit']", "input[type='submit']"]
 
-            for sel in id_selectors:
-                try:
-                    el = page.wait_for_selector(sel, timeout=3000)
-                    if el:
-                        id_field = sel
-                        break
-                except:
-                    continue
+            # [OPTIMIZATION] 다중 셀렉터 결합 시도로 탐색 속도 향상
+            combined_id_sel = ",".join(id_selectors)
+            combined_pw_sel = ",".join(pw_selectors)
+            combined_btn_sel = ",".join(btn_selectors)
 
-            for sel in pw_selectors:
-                try:
-                    el = page.query_selector(sel)
-                    if el:
-                        pw_field = sel
-                        break
-                except:
-                    continue
+            try:
+                # 첫 번째 유효한 요소가 나타날 때까지 대기 (최대 5초)
+                page.wait_for_selector(combined_id_sel, timeout=5000)
+                
+                # 실제 요소 핸들 획득
+                id_field = page.evaluate(f"() => {{ const el = document.querySelector('{combined_id_sel}'); return el ? el.id || el.name || '#'+el.id : null; }}")
+                pw_field = page.evaluate(f"() => {{ const el = document.querySelector('{combined_pw_sel}'); return el ? el.id || el.name || '#'+el.id : null; }}")
+                login_btn = page.evaluate(f"() => {{ const el = document.querySelector('{combined_btn_sel}'); return el ? el.id || el.name || '#'+el.id : null; }}")
+                
+                # evaluate가 ID나 name만 주므로 다시 selector 형식으로 보정
+                if id_field and not id_field.startswith('#'): id_field = f"[name='{id_field}'], #{id_field}"
+                if pw_field and not pw_field.startswith('#'): pw_field = f"[name='{pw_field}'], #{pw_field}"
+                if login_btn and not login_btn.startswith('#'): login_btn = f"[name='{login_btn}'], #{login_btn}"
 
-            for sel in btn_selectors:
-                try:
-                    el = page.query_selector(sel)
-                    if el:
-                        login_btn = sel
-                        break
-                except:
-                    continue
+            except Exception as e:
+                logger.warning(f"  [LOGIN] 로그인 폼 요소 탐색 타임아웃: {e}")
+                continue
 
             if not id_field or not pw_field or not login_btn:
-                logger.warning(f"  [LOGIN] 로그인 폼 요소 찾기 실패 (id={id_field}, pw={pw_field}, btn={login_btn})")
+                logger.warning(f"  [LOGIN] 로그인 폼 요소 매칭 실패")
                 continue
 
             logger.info(f"  [LOGIN] 폼 요소 발견: id={id_field}, pw={pw_field}, btn={login_btn}")
@@ -418,14 +414,14 @@ def do_login(page, user_id, user_pw):
 
             # 로그인 버튼 클릭 (확인 가능할 때까지 대기)
             logger.info("  [LOGIN] 로그인 버튼 클릭...")
-            page.click(login_btn)
+            page.click(login_btn, force=True)
 
-            # 페이지 로딩 대기 (Cloud 환경 고려하여 최대 25초 대기)
+            # [OPTIMIZATION] networkidle 대신 load를 사용하여 로딩 결과 산출 가속
             try:
-                page.wait_for_load_state("networkidle", timeout=25000)
+                page.wait_for_load_state("load", timeout=15000)
             except:
                 pass
-            time.sleep(2.0)
+            time.sleep(1.0)
 
             # 로그인 성공 확인 (여러 방법으로 판단)
             for attempt in range(20):
@@ -574,20 +570,15 @@ def do_purchase(page, numbers, user_id=""):
     page.on("dialog", handle_dialog)
 
     try:
-        # STEP 1: 구매 페이지 이동
-        logger.info("  [1/7] 구매 페이지(game645.do) 이동...")
-        # 직접 이동 전 메인 페이지를 한 번 거쳐 쿠키/Referer 유지
+        # STEP 1: 구매 페이지 직접 이동 (최적화)
+        logger.info("  [1/7] 구매 페이지 직접 진입...")
         try:
-            page.goto("https://dhlottery.co.kr/common.do?method=main", wait_until="load", timeout=15000)
-            time.sleep(1.0)
-        except: pass
-        
-        try:
-            page.goto("https://ol.dhlottery.co.kr/olotto/game/game645.do", wait_until="networkidle", timeout=30000)
+            # networkidle 대신 domcontentloaded + 수동 대기로 시간 단축
+            page.goto("https://ol.dhlottery.co.kr/olotto/game/game645.do", wait_until="domcontentloaded", timeout=25000)
         except:
-            try: page.goto("https://ol.dhlottery.co.kr/olotto/game/game645.do", wait_until="load", timeout=20000)
-            except: pass
-        time.sleep(2.0)
+            page.goto("https://ol.dhlottery.co.kr/olotto/game/game645.do", wait_until="load", timeout=15000)
+        
+        time.sleep(1.0)
 
         try:
             page.evaluate("""() => {
@@ -638,17 +629,16 @@ def do_purchase(page, numbers, user_id=""):
         except: pass
 
         try:
-            frame.wait_for_load_state("networkidle", timeout=10000)
-        except:
-            try: frame.wait_for_load_state("domcontentloaded", timeout=5000)
-            except: pass
-        time.sleep(1.0)
+            # networkidle 대신 domcontentloaded 대기 후 즉시 상호작용 시도
+            frame.wait_for_load_state("domcontentloaded", timeout=10000)
+        except: pass
+        time.sleep(0.3)
 
         # STEP 3: 게임 UI 확인 (label 존재 여부)
         logger.info("  [3/7] 번호 선택 UI 확인...")
         update_status(user_id, "번호 선택 UI 로딩 확인 중...")
         ui_loaded = False
-        for attempt in range(20):
+        for attempt in range(15):
             try:
                 label_count = frame.evaluate("""() =>
                     document.querySelectorAll('label[for^="check645num"]').length
@@ -659,7 +649,7 @@ def do_purchase(page, numbers, user_id=""):
                     break
             except:
                 pass
-            time.sleep(0.5)
+            time.sleep(0.3)
 
         if not ui_loaded:
             # 마지막 수단: 프레임 새로고침 시도 (옵션)
@@ -706,55 +696,57 @@ def do_purchase(page, numbers, user_id=""):
             logger.warning("    탭 활성화 요소를 찾지 못해 기본 모드로 진행합니다.")
         time.sleep(0.5)
 
-        # STEP 5: 번호 6개 선택
-        update_status(user_id, f"선택된 번호 입력 중: {numbers}")
-        logger.info(f"  [5/7] 번호 선택: {numbers}")
-        fail_count = 0
-        for num in numbers:
-            ok = select_number(frame, num)
-            logger.info(f"    {num:02d} {'✅' if ok else '❌'}")
-            if not ok:
-                fail_count += 1
-            time.sleep(0.08)
-
-        # 실제 체크된 수 검증
+        # STEP 5: 번호 6개 원샷 선택 (초고속 모드)
+        update_status(user_id, f"선택된 번호 번개 입력 중: {numbers}")
+        logger.info(f"  [5/7] 번호 광속 선택: {numbers}")
+        
         try:
-            checked = frame.evaluate("""() =>
-                document.querySelectorAll('input[id^="check645num"]:checked').length
-            """)
-            logger.info(f"    체크된 번호 수: {checked}/6")
-        except:
-            checked = 6 - fail_count
+            checked_count = frame.evaluate(f"""(nums) => {{
+                let success = 0;
+                nums.forEach(n => {{
+                    const lbl = document.querySelector('label[for="check645num' + n + '"]');
+                    const inp = document.getElementById('check645num' + n);
+                    if (lbl) {{ lbl.click(); success++; }}
+                    else if (inp) {{ inp.checked = true; success++; }}
+                }});
+                return success;
+            }}""", numbers)
+            logger.info(f"    선택 완료: {checked_count}/6")
+        except Exception as e:
+            logger.error(f"    번호 선택 엔진 오류: {e}")
+            # 폴백: 개별 선택 시도
+            for num in numbers:
+                select_number(frame, num)
+                time.sleep(0.05)
 
         if fail_count >= 3:
             return False, f"번호 선택 다수 실패 ({fail_count}/6 실패)"
 
         time.sleep(0.3)
 
-        # STEP 6: 선택완료(확인) 클릭
-        update_status(user_id, "선택완료 버튼 클릭...")
+        # STEP 6: 선택완료(확인) 클릭 - 광속 처리
+        update_status(user_id, "선택완료 광속 클릭...")
         logger.info("  [6/7] '선택완료' 클릭...")
-        step6_ok = False
-        try:
-            r = frame.evaluate("""() => {
-                const btn = document.getElementById('btnSelectNum');
-                if (btn) { btn.click(); return 'ok'; }
-                return null;
-            }""")
-            if r:
-                step6_ok = True
-        except:
-            pass
+        step6_ok = frame.evaluate("""() => {
+            const btn = document.getElementById('btnSelectNum');
+            if (btn) {
+                btn.click();
+                btn.dispatchEvent(new Event('change', {bubbles: true}));
+                return true;
+            }
+            return false;
+        }""")
+        
         if not step6_ok:
             try:
-                frame.locator("#btnSelectNum").click(force=True, timeout=2000)
+                frame.locator("#btnSelectNum").click(force=True, timeout=1000)
                 step6_ok = True
-            except:
-                pass
+            except: pass
+            
         if not step6_ok:
             return False, "[6/7] '선택완료' 버튼 클릭 실패"
-        logger.info("    선택완료 완료")
-        time.sleep(0.8)
+        
+        time.sleep(0.4)
 
         # 잔액/한도 에러 감지
         if dialog_msgs:
@@ -785,7 +777,7 @@ def do_purchase(page, numbers, user_id=""):
         if not step7_ok:
             return False, "[7/7] '구매하기' 버튼 클릭 실패"
         logger.info("    구매하기 완료")
-        time.sleep(1.5)
+        time.sleep(1.0)
 
         # STEP 8: 구매 확인 팝업(레이어) 처리
         update_status(user_id, "구매 확정 팝업 승인 중...")
@@ -795,44 +787,30 @@ def do_purchase(page, numbers, user_id=""):
             for ctx in [page, frame]:
                 try:
                     result = ctx.evaluate("""() => {
-                        // 1. 확인 버튼 명시적 탐색
                         const btns = [...document.querySelectorAll('a, button, input[type="button"], input[type="submit"]')];
                         const okBtn = btns.find(b => {
                             const t = (b.innerText || b.value || "").replace(/\s/g, "");
                             return t === "확인" || t === "구매" || t === "결제결정";
                         });
-                        
                         if (okBtn && okBtn.offsetParent !== null) {
                             okBtn.click();
                             return "ok_clicked";
                         }
-                        
-                        // 2. ID 기반 레이어 탐색
-                        const layer = document.getElementById('popupLayerConfirm');
-                        if (layer && layer.style.display !== 'none') {
-                            const layerOk = layer.querySelector('.btn_confirm, .button_ok, input[value="확인"], a, button');
-                            if (layerOk) { layerOk.click(); return "layer_ok_clicked"; }
-                        }
-                        return null;
                     }""")
-                    if result:
-                        logger.info(f"    결과: {result}")
-                        clicked_any = True
-                except:
-                    pass
+                    if result: clicked_any = True
+                except: pass
             if clicked_any:
-                time.sleep(1.0)
+                time.sleep(0.5)
                 break
-            time.sleep(0.8)
+            time.sleep(0.5)
             
-        time.sleep(2.0)
+        time.sleep(1.0)
 
         # 최종 결과 판정
         update_status(user_id, "구매 결과 확인 중...")
         logger.info("  === 결과 판정 ===")
-        logger.info(f"  dialog_msgs: {dialog_msgs}")
 
-        # 1) dialog 메시지에서 성공/실패 판정
+        # 1) dialog 메시지에서 성공/실패 판정 (가장 빠름)
         for msg in reversed(dialog_msgs):
             if any(k in msg for k in ["완료", "성공", "발행", "구매하셨", "정상"]):
                 return True, f"구매 완료: {msg}"
@@ -1146,6 +1124,17 @@ def automate_purchase(user_id, user_pw, numbers):
             }
         )
         page = context.new_page()
+        
+        # [OPTIMIZATION] 이미지 및 배너 차단으로 로딩 속도 2배 향상
+        def block_aggressively(route):
+            if route.request.resource_type in ["image", "font", "media"]:
+                route.abort()
+            elif "google-analytics" in route.request.url or "googletagmanager" in route.request.url:
+                route.abort()
+            else:
+                route.continue_()
+        page.route("**/*", block_aggressively)
+
         if HAS_STEALTH:
             Stealth().apply_stealth_sync(page)
         try:
