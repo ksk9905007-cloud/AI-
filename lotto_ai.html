@@ -1213,98 +1213,47 @@
         } catch { showToast('오류 발생'); }
     }
 
-    // ── 구매 모달 ──
+    // ── 구매 모달 및 진행 제어 ──
     function openPurchaseModal() {
-        // 타이틀 원복
         document.getElementById('modalTitle').innerText = '🔐 동행복권 자동 구매';
         document.getElementById('modalDesc').innerHTML = '로그인 정보는 본 기기에 안전하게 저장됩니다.<br>구매 시 저장된 정보를 사용하여 자동으로 진행합니다.';
         document.getElementById('modalConfirmBtn').innerText = '구매 시작';
         document.getElementById('modalConfirmBtn').onclick = confirmPurchase;
 
-        document.getElementById('modalId').value = savedUserId;
-        document.getElementById('modalPw').value = savedUserPw;
+        document.getElementById('modalId').value = localStorage.getItem('dhl_id') || savedUserId;
+        document.getElementById('modalPw').value = localStorage.getItem('dhl_pw') || savedUserPw;
 
         if (currentNums.length !== 6 && document.getElementById('modalConfirmBtn').innerText === '구매 시작') { 
             showToast('먼저 번호를 생성해주세요'); 
             return; 
         }
         document.getElementById('modalStatus').innerText = '';
-        document.getElementById('purchaseModal').classList.add('open');
+        document.getElementById('purchaseModal').style.display = 'flex';
+        setTimeout(() => document.getElementById('purchaseModal').classList.add('open'), 10);
     }
 
     function closePurchaseModal() {
-        document.getElementById('purchaseModal').classList.remove('open');
-    }
-
-    async function confirmPurchase() {
-        const uid = document.getElementById('modalId').value.trim();
-        const pw = document.getElementById('modalPw').value.trim();
-        const status = document.getElementById('modalStatus');
-        const btn = document.getElementById('modalConfirmBtn');
-
-        if (!uid || !pw) {
-            status.innerText = '아이디와 비밀번호를 입력하세요';
-            status.style.color = 'var(--danger)';
-            return;
-        }
-
-        btn.disabled = true;
-        btn.innerText = '구매 진행 중...';
-        status.style.color = 'var(--primary)';
-
-        const steps = [
-            {t:0,  msg:'🌐 동행복권 접속 중...'},
-            {t:3,  msg:'🔐 로그인 처리 중...'},
-            {t:8,  msg:'🎱 게임 페이지 이동 중...'},
-            {t:13, msg:'🔢 번호 선택 중...'},
-            {t:18, msg:'🛒 구매 확정 처리 중...'},
-        ];
-        const timers = steps.map(s => setTimeout(() => { status.innerText = s.msg; }, s.t * 1000));
-
-        try {
-            const res = await fetch('/buy', {
-                method: 'POST',
-                headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({id: uid, pw, numbers: currentNums})
-            });
-            const data = await res.json();
-            timers.forEach(t => clearTimeout(t));
-
-            if (data.success) {
-                // 로그인 정보 저장
-                savedUserId = uid;
-                savedUserPw = pw;
-                localStorage.setItem('lotto_uid', uid);
-                localStorage.setItem('lotto_upw', pw);
-
-                closePurchaseModal();
-                showSuccessPopup(data);
-                loadHistory(uid);
-            } else {
-                status.innerText = '❌ ' + data.message;
-                status.style.color = 'var(--danger)';
-            }
-        } catch {
-            timers.forEach(t => clearTimeout(t));
-            status.innerText = '⚠️ 서버 연결 오류';
-            status.style.color = 'var(--danger)';
-        } finally {
-            btn.disabled = false;
-            btn.innerText = '구매 시작';
-        }
+        const modal = document.getElementById('purchaseModal');
+        modal.classList.remove('open');
+        setTimeout(() => modal.style.display = 'none', 300);
     }
 
     // ── 구매 성공 팝업 ──
-    function showSuccessPopup(data) {
+    function showSuccessModal(data) {
         document.getElementById('successDrawInfo').innerText = `제 ${data.draw_no}회 로또 6/45`;
         const numsEl = document.getElementById('successNumbers');
-        numsEl.innerHTML = data.numbers.map(n=>makeBall(n,'lg')).join('');
+        numsEl.innerHTML = data.numbers.map(n => makeBall(n, 'lg')).join('');
         document.getElementById('successTime').innerText = `구매 완료: ${data.purchased_at}`;
-        document.getElementById('successModal').classList.add('open');
+        
+        const modal = document.getElementById('successModal');
+        modal.style.display = 'flex';
+        setTimeout(() => modal.classList.add('open'), 10);
     }
 
     function closeSuccessModal() {
-        document.getElementById('successModal').classList.remove('open');
+        const modal = document.getElementById('successModal');
+        modal.classList.remove('open');
+        setTimeout(() => modal.style.display = 'none', 300);
     }
 
     // ── 동기화 ──
@@ -1829,6 +1778,7 @@
         }
         nums.sort((a,b) => a-b);
         window.optimalNumbersGlobal = nums;
+        currentNums = nums; // 메인 AI 연동 변수 동기화
         
         ballsDiv.innerHTML = '';
         nums.forEach((n, i) => {
@@ -1842,6 +1792,10 @@
                 if(i === 5) showToast('✨ AI 최적 번호 추출이 완료되었습니다!');
             }, i * 150);
         });
+        
+        // 메인 구매 버튼 활성화 체크
+        const buyBtn = document.getElementById('purchaseBtn');
+        if(buyBtn) buyBtn.disabled = false;
     }
 
     // --- 수동 번호 피크 모달 로직 ---
