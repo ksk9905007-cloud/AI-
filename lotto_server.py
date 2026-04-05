@@ -442,16 +442,20 @@ def do_login(page, user_id, user_pw):
 #  iframe 탐색
 # ─────────────────────────────────────────────────────────
 def find_game_frame(page):
-    for _ in range(20):
+    for _ in range(25):
         try:
             # 1. URL이나 name에 game645가 포함된 프레임 탐색
             for f in page.frames:
                 if "game645" in f.url.lower() or "game645" in f.name.lower():
                     return f
-            # 2. 동행복권의 핵심 iframe 이름인 ifrm_lotto645 추가 연동
+            # 2. 동행복권의 핵심 iframe 이름인 ifrm_lotto645 연동
             for f in page.frames:
                 if "ifrm_lotto645" in f.name.lower() or "lotto645" in f.url.lower():
                     return f
+            
+            # 3. 만약 위에서 못 찾았는데, 메인 페이지에 직접 번호 선택(check645num) 요소가 있다면 메인 프레임 반환
+            if page.query_selector("label[for^='check645num']"):
+                return page.main_frame
         except:
             pass
         time.sleep(0.5)
@@ -537,8 +541,23 @@ def do_purchase(page, numbers):
         except:
             pass
 
-        # STEP 2: iframe 탐색
-        logger.info("  [2/7] game645 iframe 탐색...")
+        # STEP 2: iframe 탐색 및 팝업 제거
+        logger.info("  [2/7] game645 iframe 탐색 및 방해 요소 제거...")
+        time.sleep(2.0)
+        
+        # 레이어 팝업 닫기 시도 (구매 화면을 가리는 공지사항 등)
+        try:
+            page.evaluate("""() => {
+                const btns = [...document.querySelectorAll('button, a, span')];
+                for (const b of btns) {
+                    const txt = b.innerText || "";
+                    if (txt.includes('닫기') || txt.includes('오늘 하루') || txt.includes('X')) {
+                        try { b.click(); } catch(e) {}
+                    }
+                }
+            }""")
+        except: pass
+
         frame = find_game_frame(page)
         if not frame:
             cur_url = page.url
