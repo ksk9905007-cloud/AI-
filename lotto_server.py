@@ -634,7 +634,8 @@ def do_purchase(page, numbers, user_id=""):
             is_waiting = page.evaluate("""() => {
                 const wait = document.getElementById('waitPage');
                 if (wait && (window.getComputedStyle(wait).display !== 'none')) return true;
-                if (document.body.innerText.includes('대기') && document.body.innerText.includes('접속자')) return true;
+                const bodyText = document.body ? document.body.innerText : '';
+                if (bodyText.includes('대기') && bodyText.includes('접속자')) return true;
                 return false;
             }""")
             if is_waiting:
@@ -912,7 +913,7 @@ def do_purchase(page, numbers, user_id=""):
             res_verdict = "unknown"
             for target in [page, frame]:
                 verdict = target.evaluate("""() => {
-                    const t = document.body.innerText || '';
+                    const t = (document.body ? document.body.innerText : '');
                     if (t.includes('구매가 완료') || t.includes('발행번호') || t.includes('정상적으로 처리')) return 'ok';
                     if (t.includes('잔액이 부족') || t.includes('한도를 초과') || t.includes('구매에 실패')) return 'fail';
                     return 'unknown';
@@ -944,7 +945,7 @@ def do_purchase(page, numbers, user_id=""):
              logger.warning("  ⚠️ 구매 컨펌은 확인되었으나 완료 알림이 감지되지 않음.")
              # 그래도 일단 step7까지 왔으므로 사이트의 완료 페이지를 한 번 더 체크
              time.sleep(2.0)
-             final_check = frame.evaluate("() => document.body.innerText")
+             final_check = frame.evaluate("() => (document.body ? document.body.innerText : '')")
              if "완료" in final_check or "처리" in final_check:
                  return True, "구매 완료 (상태 확인됨)"
              return False, "구매 결과가 불확실합니다. 예치금 잔액을 확인해 주세요."
