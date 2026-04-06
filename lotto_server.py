@@ -856,12 +856,12 @@ def do_purchase(page, numbers, user_id=""):
         update_status(user_id, "구매 확정 팝업 승인 중...")
         logger.info("  [8/7] 구매 확정 진행 중 (팝업 레이어/다이얼로그 승인)...")
         
-        # 팝업이 뜰 때까지 잠시 대기하며 반복 시도
+        # 팝업이 뜰 때까지 잠시 대기하며 반복 시도 (클라우드 환경 지연 고려)
         popup_approved = False
-        for i in range(12):
-            # 만약 아무런 팝업도 안 떴다면? 구매 버튼 다시 클릭 (가끔 클릭 씹힘 방지)
-            if i == 5 and not dialog_msgs and not popup_approved:
-                logger.warning("    팝업 미감지: 구매 버튼 재클릭 시도...")
+        for i in range(15):
+            # 만약 아무런 팝업도 안 떴다면? 구매 버튼 다시 클릭 (클릭 씹힘 방지)
+            if i % 5 == 0 and i > 0 and not popup_approved:
+                logger.warning(f"    [STEP 8] 팝업 미감지({i}회차): 구매 버튼 재클릭 시도...")
                 try: frame.locator("#btnBuy").click(force=True, timeout=1000)
                 except: pass
 
@@ -869,47 +869,66 @@ def do_purchase(page, numbers, user_id=""):
             for ctx in [page, frame]:
                 try:
                     result = ctx.evaluate("""() => {
-                        // 1. 레이어 팝업(confirmLayer) 내 확인 버튼 우선
-                        const layer = document.getElementById('popupLayerConfirm') || document.querySelector('.popup_layer, .layer_pop');
-                        if (layer && (window.getComputedStyle(layer).display !== 'none')) {
-                            // 명시적인 "확인" 또는 "구매" 버튼 찾기
-                            const okBtn = Array.from(layer.querySelectorAll('a, button, input')).find(b => {
-                                const t = (b.innerText || b.value || "").replace(/\s/g, "");
-                                return t === "확인" || t === "구매" || t === "결제결정" || t === "예";
-                            });
-                            if (okBtn) { okBtn.click(); return "layer_btn_clicked"; }
+                        // 1. 특정 ID를 가진 확인 레이어 우선 탐색
+                        const layers = ['popupLayerConfirm', 'popupLayerError', 'common_layer_pop', 'lay_pop'];
+                        for (const id of layers) {
+                            const layer = document.getElementById(id);
+                            if (layer && (window.getComputedStyle(layer).display !== 'none')) {
+                                // "확인" 또는 "구매"가 적힌 버튼 모두 클릭 시도
+                                const okBtns = Array.from(layer.querySelectorAll('a, button, input')).filter(b => {
+                                    const t = (b.innerText || b.value || "").replace(/\s/g, "");
+                                    return ["확인", "구매", "결제결정", "예", "OK"].includes(t);
+                                });
+                                okBtns.forEach(b => b.click());
+                                if (okBtns.length > 0) return "layer_" + id + "_btn_clicked";
+                            }
                         }
                         
-                        // 2. 일반적인 확인 성격의 모든 버튼 탐색 (보수적)
-                        const btns = Array.from(document.querySelectorAll('a, button, input[type="button"]'));
-                        const anyOk = btns.find(b => {
+                        // 2. 클래스 기반 레이어 탐색
+                        const clsLayers = document.querySelectorAll('.popup_layer, .layer_pop, .modal, .ui-dialog');
+                        for (const layer of clsLayers) {
+                            if (window.getComputedStyle(layer).display !== 'none') {
+                                const okBtn = Array.from(layer.querySelectorAll('a, button, input')).find(b => {
+                                    const t = (b.innerText || b.value || "").replace(/\s/g, "");
+                                    return ["확인", "구매", "결제결정", "예"].includes(t);
+                                });
+                                if (okBtn) { okBtn.click(); return "class_layer_btn_clicked"; }
+                            }
+                        }
+                        
+                        // 3. 화면상에 떠있는 모든 '확인' 성격의 버튼 강제 클릭 (최후 수단)
+                        const allBtns = Array.from(document.querySelectorAll('a, button, input[type="button"]')).filter(b => {
                             if (b.offsetParent === null) return false;
                             const t = (b.innerText || b.value || "").replace(/\s/g, "");
-                            return t === "확인" || t === "구매" || t === "결제결정" || t === "예";
+                            return ["확인", "구매", "결제결정", "예"].includes(t);
                         });
-                        if (anyOk) { anyOk.click(); return "general_btn_clicked_" + (anyOk.innerText || anyOk.value); }
+                        
+                        if (allBtns.length > 0) {
+                            allBtns.forEach(b => b.click());
+                            return "all_ok_btns_clicked_" + allBtns.length;
+                        }
                         
                         return null;
                     }""")
                     if result:
-                        logger.info(f"    승인 액션 수행: {result}")
+                        logger.info(f"    [STEP 8] 승인 액션 수행: {result}")
                         clicked_any = True
                         popup_approved = True
                 except:
                     pass
             
             if clicked_any:
-                time.sleep(1.0)
+                time.sleep(1.2)
             
-            # 다이얼로그(native alert/confirm) 메시지가 들어왔는지도 체크
+            # 다이얼로그(native alert/confirm) 메시지가 감지되었는지 확인
             if dialog_msgs:
                 popup_approved = True
             
-            time.sleep(0.6)
-            if i > 8 and popup_approved: break # 어느정도 클릭했으면 조기 종료
+            time.sleep(0.7)
+            if i > 8 and popup_approved: break # 어느정도 성공했으면 대기 후 결과 판정으로
             
-        # 결과 대기 시간을 더 충분히 가짐
-        time.sleep(3.5)
+        # 결과 대기 시간을 더 충분히 가짐 (클라우드 네트워크 지연)
+        time.sleep(5.0)
 
         # 최종 결과 판정
         update_status(user_id, "구매 결과 최종 판정 중...")
