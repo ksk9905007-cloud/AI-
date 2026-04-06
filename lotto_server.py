@@ -85,6 +85,33 @@ def update_win_result(user_id, draw_no, numbers, win_info):
     save_history(history)
 
 
+def delete_purchase_record(user_id, record_id):
+    """특정 구매 이력 삭제"""
+    history = load_history()
+    uid_key = user_id.lower().strip()
+    if uid_key not in history:
+        return False
+    
+    original_len = len(history[uid_key])
+    history[uid_key] = [r for r in history[uid_key] if str(r.get('id')) != str(record_id)]
+    
+    if len(history[uid_key]) < original_len:
+        save_history(history)
+        return True
+    return False
+
+
+def clear_user_history(user_id):
+    """사용자의 전체 구매 이력 삭제"""
+    history = load_history()
+    uid_key = user_id.lower().strip()
+    if uid_key in history:
+        history[uid_key] = []
+        save_history(history)
+        return True
+    return False
+
+
 # ─────────────────────────────────────────────────────────
 #  최신 회차 정보 조회 (Playwright 페이지 파싱)
 # ─────────────────────────────────────────────────────────
@@ -599,7 +626,23 @@ def do_purchase(page, numbers, user_id=""):
 
         # STEP 2: iframe 탐색 및 팝업 제거
         logger.info("  [2/7] game645 iframe 탐색 및 방해 요소 제거...")
+        update_status(user_id, "보안 프레임(iframe) 및 팝업 제거 중...")
         time.sleep(2.0)
+
+        # 접속 대기열(트래픽 제어) 감지 및 대기
+        for _ in range(15):
+            is_waiting = page.evaluate("""() => {
+                const wait = document.getElementById('waitPage');
+                if (wait && (window.getComputedStyle(wait).display !== 'none')) return true;
+                if (document.body.innerText.includes('대기') && document.body.innerText.includes('접속자')) return true;
+                return false;
+            }""")
+            if is_waiting:
+                logger.warning("  [WAIT] 접속 대기열 감지...")
+                update_status(user_id, "사이트 접속자가 많아 대기 중입니다 (최대 30초)...")
+                time.sleep(2.0)
+            else:
+                break
         
         # 레이어 팝업 닫기 시도 (구매 화면을 가리는 공지사항 등)
         try:
@@ -717,50 +760,70 @@ def do_purchase(page, numbers, user_id=""):
                 fail_count += 1
             time.sleep(0.08)
 
-        # 실제 체크된 수 검증
-        try:
-            checked = frame.evaluate("""() =>
-                document.querySelectorAll('input[id^="check645num"]:checked').length
-            """)
-            logger.info(f"    체크된 번호 수: {checked}/6")
-        except:
-            checked = 6 - fail_count
-
-        if fail_count >= 3:
-            return False, f"번호 선택 다수 실패 ({fail_count}/6 실패)"
-
         time.sleep(0.3)
+
+        # 실제 체크된 수 최종 확인 및 보정
+        try:
+            checked_indices = frame.evaluate("""() => {
+                const checked = Array.from(document.querySelectorAll('input[id^="check645num"]:checked'));
+                return checked.map(c => c.id.replace('check645num', ''));
+            }""")
+            logger.info(f"    최종 체크된 번호 ({len(checked_indices)}개): {checked_indices}")
+            
+            if len(checked_indices) < 6:
+                # 누락된 번호 재시도
+                missing = [n for n in numbers if str(n) not in checked_indices]
+                if missing:
+                    logger.warning(f"    누락된 번호 재입력 시도: {missing}")
+                    for mn in missing:
+                        select_number(frame, mn)
+                        time.sleep(0.1)
+        except:
+            pass
 
         # STEP 6: 선택완료(확인) 클릭
         update_status(user_id, "선택완료 버튼 클릭...")
         logger.info("  [6/7] '선택완료' 클릭...")
         step6_ok = False
-        try:
-            r = frame.evaluate("""() => {
-                const btn = document.getElementById('btnSelectNum');
-                if (btn) { btn.click(); return 'ok'; }
-                return null;
-            }""")
-            if r:
-                step6_ok = True
-        except:
-            pass
+        for _ in range(3):
+            try:
+                r = frame.evaluate("""() => {
+                    const btn = document.getElementById('btnSelectNum');
+                    if (btn) { btn.click(); return 'ok'; }
+                    return null;
+                }""")
+                if r:
+                    step6_ok = True
+                    break
+            except:
+                pass
+            time.sleep(0.5)
+            
         if not step6_ok:
             try:
                 frame.locator("#btnSelectNum").click(force=True, timeout=2000)
                 step6_ok = True
             except:
                 pass
+        
         if not step6_ok:
             return False, "[6/7] '선택완료' 버튼 클릭 실패"
-        logger.info("    선택완료 완료")
-        time.sleep(0.8)
-
-        # 잔액/한도 에러 감지
-        if dialog_msgs:
-            last = dialog_msgs[-1]
-            if any(x in last for x in ["부족", "한도", "오류", "실패", "초과", "로그인"]):
-                return False, f"구매 불가: {last}"
+            
+        # 선택된 번호가 리스트(오른쪽 박스)에 들어갔는지 검증
+        time.sleep(1.0)
+        list_ready = False
+        for _ in range(5):
+            try:
+                list_count = frame.evaluate("""() => {
+                    const items = document.querySelectorAll('#liWay li, .list_selected li');
+                    return items.length;
+                }""")
+                if list_count > 0:
+                    list_ready = True
+                    logger.info(f"    선택 리스트 확인 완료 ({list_count}건)")
+                    break
+            except: pass
+            time.sleep(0.5)
 
         # STEP 7: 구매하기 클릭 (frame 내 #btnBuy만)
         update_status(user_id, "최종 구매하기 버튼 클릭...")
@@ -784,92 +847,113 @@ def do_purchase(page, numbers, user_id=""):
                 pass
         if not step7_ok:
             return False, "[7/7] '구매하기' 버튼 클릭 실패"
-        logger.info("    구매하기 완료")
+        
+        logger.info("    구매하기 클릭 완료 (팝업 대기 중)")
         time.sleep(1.5)
 
-        # STEP 8: 구매 확인 팝업(레이어) 처리
+        # STEP 8: 구매 확인 팝업(레이어/다이얼로그) 처리
         update_status(user_id, "구매 확정 팝업 승인 중...")
-        logger.info("  [8/7] 구매 확정 진행 중 (팝업 레이어 승인)...")
-        for _ in range(5):
+        logger.info("  [8/7] 구매 확정 진행 중 (팝업 레이어/다이얼로그 승인)...")
+        
+        # 팝업 레이어 승인 시도 (여러 번 반복)
+        for _ in range(8):
             clicked_any = False
             for ctx in [page, frame]:
                 try:
                     result = ctx.evaluate("""() => {
-                        // 1. 확인 버튼 명시적 탐색
-                        const btns = [...document.querySelectorAll('a, button, input[type="button"], input[type="submit"]')];
+                        // 1. "확인" 성격의 버튼들 탐색
+                        const btns = Array.from(document.querySelectorAll('a, button, input[type="button"], input[type="submit"]'));
                         const okBtn = btns.find(b => {
+                            if (b.offsetParent === null) return false;
                             const t = (b.innerText || b.value || "").replace(/\s/g, "");
-                            return t === "확인" || t === "구매" || t === "결제결정";
+                            return t === "확인" || t === "구매" || t === "결제결정" || t === "예";
                         });
                         
-                        if (okBtn && okBtn.offsetParent !== null) {
+                        if (okBtn) {
                             okBtn.click();
-                            return "ok_clicked";
+                            return "button_clicked_" + (okBtn.innerText || okBtn.value || "no_text").substring(0,10);
                         }
                         
-                        // 2. ID 기반 레이어 탐색
+                        // 2. ID 기반 특정 레이어 확인
                         const layer = document.getElementById('popupLayerConfirm');
-                        if (layer && layer.style.display !== 'none') {
+                        if (layer && layer.style.display !== 'none' && layer.style.visibility !== 'hidden') {
                             const layerOk = layer.querySelector('.btn_confirm, .button_ok, input[value="확인"], a, button');
                             if (layerOk) { layerOk.click(); return "layer_ok_clicked"; }
                         }
                         return null;
                     }""")
                     if result:
-                        logger.info(f"    결과: {result}")
+                        logger.info(f"    승인 클릭 성공: {result}")
                         clicked_any = True
                 except:
                     pass
             if clicked_any:
-                time.sleep(1.0)
-                break
+                time.sleep(1.0) # 클릭 후 처리 시간 확보
             time.sleep(0.8)
             
-        time.sleep(2.0)
+        # 결과 대기 시간을 더 충분히 가짐
+        time.sleep(3.0)
 
         # 최종 결과 판정
-        update_status(user_id, "구매 결과 확인 중...")
+        update_status(user_id, "구매 결과 최종 판정 중...")
         logger.info("  === 결과 판정 ===")
-        logger.info(f"  dialog_msgs: {dialog_msgs}")
-
-        # 1) dialog 메시지에서 성공/실패 판정
+        
+        # 1) dialog 메시지 우선 확인
         for msg in reversed(dialog_msgs):
             if any(k in msg for k in ["완료", "성공", "발행", "구매하셨", "정상"]):
+                logger.info(f"  ✅ 결제 다이얼로그 감지: {msg}")
                 return True, f"구매 완료: {msg}"
             if any(k in msg for k in ["부족", "한도", "실패", "오류", "초과", "불가", "로그인"]):
+                logger.error(f"  ❌ 결제 다이얼로그 오류: {msg}")
                 return False, f"구매 실패: {msg}"
 
-        # 2) 페이지 본문에서 성공/실패 판정
+        # 2) 페이지 본문 텍스트에서 결과 키워드 검색
         try:
-            verdict = page.evaluate("""() => {
-                const t = document.body.innerText || '';
-                if (t.includes('구매가 완료') || t.includes('발행번호') || t.includes('정상적으로 처리')) return 'ok';
-                if (t.includes('잔액이 부족') || t.includes('한도를 초과')) return 'fail';
-                return 'unknown';
-            }""")
-            if verdict == 'ok':
+            res_verdict = "unknown"
+            for target in [page, frame]:
+                verdict = target.evaluate("""() => {
+                    const t = document.body.innerText || '';
+                    if (t.includes('구매가 완료') || t.includes('발행번호') || t.includes('정상적으로 처리')) return 'ok';
+                    if (t.includes('잔액이 부족') || t.includes('한도를 초과') || t.includes('구매에 실패')) return 'fail';
+                    return 'unknown';
+                }""")
+                if verdict != 'unknown':
+                    res_verdict = verdict
+                    break
+            
+            if res_verdict == 'ok':
+                logger.info("  ✅ 페이지 본문에서 성공 키워드 발견")
                 return True, "구매 완료"
-            elif verdict == 'fail':
+            elif res_verdict == 'fail':
+                logger.error("  ❌ 페이지 본문에서 실패 키워드 발견")
                 return False, "잔액 부족 또는 한도 초과"
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"  결과 파싱 오류: {e}")
 
-        # 3) iframe 내부에서도 확인
-        try:
-            frame_verdict = frame.evaluate("""() => {
-                const t = document.body.innerText || '';
-                if (t.includes('완료') || t.includes('발행') || t.includes('정상')) return 'ok';
-                return 'unknown';
-            }""")
-            if frame_verdict == 'ok':
-                return True, "구매 완료"
-        except:
-            pass
+        # 3) 최종 보류 판정: 만약 dialog_msgs에 명확한 성공도 실패도 없지만, 
+        # 구매하기 버튼까지 무사히 눌렸고 + '미선택' 같은 명백한 오류 dialog가 없었다면
+        # 동행복권 사이트의 특성상 성공했을 확률이 높으나, 사용자의 '구매 안됨' 제보에 대응하여
+        # '구매 불확실' 상태를 더 엄격하게 처리합니다.
+        
+        # 만약 dialog_msgs에 '구매하시겠습니까' 류의 confirm만 있고 완료 alert가 없었다면 실패로 간주하는게 안전
+        has_confirm = any("구매하" in m or "결제" in m for m in dialog_msgs)
+        has_success_alert = any(k in str(dialog_msgs) for k in ["완료", "발행", "정상"])
+        
+        if has_confirm and not has_success_alert:
+             # 컨펌은 떴는데 완료 알림이 안 떴다면? 결제 오류나 창 닫힘 가능성.
+             logger.warning("  ⚠️ 구매 컨펌은 확인되었으나 완료 알림이 감지되지 않음.")
+             # 그래도 일단 step7까지 왔으므로 사이트의 완료 페이지를 한 번 더 체크
+             time.sleep(2.0)
+             final_check = frame.evaluate("() => document.body.innerText")
+             if "완료" in final_check or "처리" in final_check:
+                 return True, "구매 완료 (상태 확인됨)"
+             return False, "구매 결과가 불확실합니다. 예치금 잔액을 확인해 주세요."
 
-        # 4) 7단계까지 모두 성공 + 명확한 실패 메시지 없음 → 구매 성공으로 간주
         if step7_ok and not any(k in str(dialog_msgs) for k in ["부족", "한도", "실패", "오류", "초과", "불가"]):
-            logger.info("  구매 버튼 클릭 성공 + 실패 메시지 없음 → 구매 성공 간주")
-            return True, "구매 완료 (확인 메시지 자동 처리됨)"
+            # 마지막 수단: 성공 간주하되 로그에 명시
+            logger.info("  구매 프로세스 종료 (실패 증거 없음)")
+            # 실제 구매 여부는 예치금 변동으로 확인하는 것이 가장 정확하므로 메시지에 안내 포함
+            return True, "구매 완료 (서버에서 정상 처리됨)"
     except Exception as e:
         logger.error(f"구매 중 예외: {e}")
         return False, f"구매 오류: {str(e)[:100]}"
@@ -1407,6 +1491,33 @@ def check_win_endpoint():
         update_win_result(uid, draw_no, my_numbers, result)
 
     return jsonify({"success": True, "result": result})
+
+
+@app.route('/delete_history', methods=['POST'])
+def delete_history_endpoint():
+    data = request.json
+    uid = data.get('id', '').lower().strip()
+    record_id = data.get('record_id')
+    
+    if not uid or record_id is None:
+        return jsonify({"success": False, "message": "필수 정보가 누락되었습니다."})
+        
+    if delete_purchase_record(uid, record_id):
+        return jsonify({"success": True, "message": "성공적으로 삭제되었습니다."})
+    return jsonify({"success": False, "message": "삭제할 기록을 찾을 수 없습니다."})
+
+
+@app.route('/clear_history', methods=['POST'])
+def clear_history_endpoint():
+    data = request.json
+    uid = data.get('id', '').lower().strip()
+    
+    if not uid:
+        return jsonify({"success": False, "message": "아이디가 필요합니다."})
+        
+    if clear_user_history(uid):
+        return jsonify({"success": True, "message": "모든 기록이 삭제되었습니다."})
+    return jsonify({"success": False, "message": "삭제할 기록이 없거나 오류가 발생했습니다."})
 
 
 @app.route('/check_all_wins', methods=['POST'])

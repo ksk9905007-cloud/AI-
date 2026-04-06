@@ -474,6 +474,7 @@
 <span id="historyUserId" onclick="openSyncModal()" style="font-size:.8rem;color:var(--muted);font-weight:600; cursor:pointer;" title="계정 관리"></span>
 <button class="btn btn-sm btn-outline btn-server-dep" onclick="openSyncModal()" title="공식 사이트 동기화">🔄 동기화</button>
 <button class="btn btn-sm btn-success btn-server-dep" onclick="checkAllWins()">🏆 당첨 확인</button>
+<button class="btn btn-sm btn-danger btn-server-dep" onclick="clearAllHistory()" style="background:#fef2f2; color:var(--danger); border:1px solid #fee2e2;">🗑️ 전체 삭제</button>
 </div>
 </div>
 <div class="search-wrap">
@@ -490,10 +491,11 @@
 <th>당첨금</th>
 <th>당첨</th>
 <th>확인</th>
+<th style="width:50px;">삭제</th>
 </tr>
 </thead>
 <tbody id="historyBody">
-<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:1.5rem;">구매 이력이 없습니다</td></tr>
+<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1.5rem;">구매 이력이 없습니다</td></tr>
 </tbody>
 </table>
 </div>
@@ -1007,7 +1009,7 @@
         if (!uid || uid === '') {
             if(userIdDisplay) userIdDisplay.innerText = '';
             if(historyTableBody) {
-                historyTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:2.5rem;">🔄 공식 사이트 동기화가 필요합니다</td></tr>';
+                historyTableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:2.5rem;">🔄 공식 사이트 동기화가 필요합니다</td></tr>';
             }
             return;
         }
@@ -1021,17 +1023,17 @@
                 historyRecords = data.records;
                 renderHistory(data.records);
             } else {
-                historyTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:2.5rem;">데이터가 없습니다. 동기화 버튼을 눌러주세요.</td></tr>';
+                historyTableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:2.5rem;">데이터가 없습니다. 동기화 버튼을 눌러주세요.</td></tr>';
             }
         } catch (e) {
-            historyTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:2.5rem;">⚠️ 서버 연결 오류</td></tr>';
+            historyTableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:2.5rem;">⚠️ 서버 연결 오류</td></tr>';
         }
     }
 
     function renderHistory(records) {
         const tbody = document.getElementById('historyBody');
         if (!records || records.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:2.5rem;">구매 이력이 없습니다</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:2.5rem;">구매 이력이 없습니다</td></tr>';
             return;
         }
         
@@ -1046,7 +1048,7 @@
             if (officialResult === '미추첨' || rank === -1) {
                 winBadge = `<span class="win-badge" style="background:#94a3b8;color:#fff;">미추첨</span>`;
             } else if (r.win_checked && winResult.label) {
-                const cls = rank > 0 ? `win-${rank}` : 'win-0';
+                const cls = (rank > 0 && rank <= 5) ? `win-${rank}` : 'win-0';
                 winBadge = `<span class="win-badge ${cls}">${winResult.label}</span>`;
             } else {
                 winBadge = `<span class="win-badge win-none">미확인</span>`;
@@ -1056,6 +1058,8 @@
                 ? `<button class="check-btn" disabled style="opacity:0.5;">대기</button>` 
                 : `<button class="check-btn" onclick="checkSingleWin(${r.draw_no}, '${JSON.stringify(r.numbers).replace(/'/g, "\\'")}')">확인</button>`;
 
+            const deleteBtn = `<button onclick="deleteHistoryRecord(${r.id})" style="background:none; border:none; color:#cbd5e1; cursor:pointer; font-size:1.1rem; padding:4px;" title="삭제" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='#cbd5e1'">×</button>`;
+
             return `
                 <tr class="history-item">
                     <td><b>${r.draw_no}회</b></td>
@@ -1064,9 +1068,52 @@
                     <td style="font-size:0.9rem;font-weight:700;color:var(--primary);">${r.prize || '-'}</td>
                     <td>${winBadge}</td>
                     <td>${checkBtn}</td>
+                    <td style="text-align:center;">${deleteBtn}</td>
                 </tr>
             `;
         }).join('');
+    }
+
+    async function deleteHistoryRecord(recordId) {
+        if (!savedUserId || !confirm('이 기록을 삭제하시겠습니까?')) return;
+        
+        try {
+            const res = await fetch(`${API_BASE}/delete_history`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: savedUserId, record_id: recordId })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('삭제되었습니다.');
+                loadHistory(savedUserId);
+            } else {
+                showToast(data.message || '삭제 실패');
+            }
+        } catch (e) {
+            showToast('서버 통신 오류');
+        }
+    }
+
+    async function clearAllHistory() {
+        if (!savedUserId || !confirm('사용자의 모든 구매 이력을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) return;
+        
+        try {
+            const res = await fetch(`${API_BASE}/clear_history`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: savedUserId })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('모든 기록이 삭제되었습니다.');
+                loadHistory(savedUserId);
+            } else {
+                showToast(data.message || '삭제 실패');
+            }
+        } catch (e) {
+            showToast('서버 통신 오류');
+        }
     }
 
     async function confirmPurchase() {
