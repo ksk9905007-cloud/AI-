@@ -474,6 +474,7 @@
 <span id="historyUserId" onclick="openSyncModal()" style="font-size:.8rem;color:var(--muted);font-weight:600; cursor:pointer;" title="계정 관리"></span>
 <button class="btn btn-sm btn-outline btn-server-dep" onclick="openSyncModal()" title="공식 사이트 동기화">🔄 동기화</button>
 <button class="btn btn-sm btn-success btn-server-dep" onclick="checkAllWins()">🏆 당첨 확인</button>
+<button class="btn btn-sm btn-outline" onclick="window.open('https://dhlottery.co.kr/myPage.do?method=lottoBuyList', '_blank')" style="background:#f8fafc; color:#475569; border:1px solid #e2e8f0;" title="공식 사이트 구매내역 바로가기">🔗 공식 내역</button>
 <button class="btn btn-sm btn-danger btn-server-dep" onclick="clearAllHistory()" style="background:#fef2f2; color:var(--danger); border:1px solid #fee2e2;">🗑️ 전체 삭제</button>
 </div>
 </div>
@@ -1185,10 +1186,19 @@
                     if (data.logs && data.logs.length > 0) {
                         console.innerHTML = data.logs.map(log => {
                             let color = "#cbd5e1";
-                            if (log.includes("성공") || log.includes("완료")) color = "#34d399";
-                            if (log.includes("실패") || log.includes("오류")) color = "#fb7185";
-                            if (log.includes("접속") || log.includes("탐색")) color = "#94a3b8";
-                            return `<div style="color: ${color}; margin-bottom: 4px;">${log}</div>`;
+                            let icon = "•";
+                            if (log.includes("성공") || log.includes("완료") || log.includes("확인됨")) { color = "#34d399"; icon = "check"; }
+                            if (log.includes("실패") || log.includes("오류") || log.includes("없음")) { color = "#fb7185"; icon = "×"; }
+                            if (log.includes("접속") || log.includes("탐색") || log.includes("대기")) { color = "#94a3b8"; icon = "→"; }
+                            
+                            const now = new Date();
+                            const timeStr = `[${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}]`;
+                            
+                            return `<div style="color: ${color}; margin-bottom: 6px; font-size: 0.9rem; line-height: 1.4;">
+                                <span style="opacity: 0.5; font-size: 0.8rem; font-family: monospace;">${timeStr}</span> 
+                                <span style="font-weight: 600; margin-right: 4px;">${icon}</span>
+                                ${log}
+                            </div>`;
                         }).join('');
                         console.scrollTop = console.scrollHeight;
                     }
@@ -1305,6 +1315,20 @@
         
         const modal = document.getElementById('successModal');
         modal.style.display = 'flex';
+        
+        // 공식 내역 바로가기 버튼 추가 (없으면 생성)
+        let linkBtn = document.getElementById('successSiteLink');
+        if (!linkBtn) {
+            linkBtn = document.createElement('button');
+            linkBtn.id = 'successSiteLink';
+            linkBtn.className = 'btn btn-outline';
+            linkBtn.style.marginTop = '1rem';
+            linkBtn.style.width = '100%';
+            linkBtn.innerText = '🔗 공식 사이트 구매내역 확인';
+            linkBtn.onclick = () => window.open('https://dhlottery.co.kr/myPage.do?method=lottoBuyList', '_blank');
+            document.querySelector('#successModal .modal-box').appendChild(linkBtn);
+        }
+        
         setTimeout(() => modal.classList.add('open'), 10);
     }
 

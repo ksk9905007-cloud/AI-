@@ -931,33 +931,92 @@ def do_purchase(page, numbers, user_id=""):
         except Exception as e:
             logger.warning(f"  결과 파싱 오류: {e}")
 
-        # 3) 최종 보류 판정: 만약 dialog_msgs에 명확한 성공도 실패도 없지만, 
-        # 구매하기 버튼까지 무사히 눌렸고 + '미선택' 같은 명백한 오류 dialog가 없었다면
-        # 동행복권 사이트의 특성상 성공했을 확률이 높으나, 사용자의 '구매 안됨' 제보에 대응하여
-        # '구매 불확실' 상태를 더 엄격하게 처리합니다.
+        # 3) 최종 보류 판정 및 사이트 내역 실시간 대조 (추가 검증 단계)
+        # 사용자의 '구매 안됨' 제보에 대응하여, 불확실한 경우 실제 구매 내역 페이지를 방문하여 확인합니다.
         
-        # 만약 dialog_msgs에 '구매하시겠습니까' 류의 confirm만 있고 완료 alert가 없었다면 실패로 간주하는게 안전
         has_confirm = any("구매하" in m or "결제" in m for m in dialog_msgs)
         has_success_alert = any(k in str(dialog_msgs) for k in ["완료", "발행", "정상"])
         
-        if has_confirm and not has_success_alert:
-             # 컨펌은 떴는데 완료 알림이 안 떴다면? 결제 오류나 창 닫힘 가능성.
-             logger.warning("  ⚠️ 구매 컨펌은 확인되었으나 완료 알림이 감지되지 않음.")
-             # 그래도 일단 step7까지 왔으므로 사이트의 완료 페이지를 한 번 더 체크
-             time.sleep(2.0)
-             final_check = frame.evaluate("() => (document.body ? document.body.innerText : '')")
-             if "완료" in final_check or "처리" in final_check:
-                 return True, "구매 완료 (상태 확인됨)"
-             return False, "구매 결과가 불확실합니다. 예치금 잔액을 확인해 주세요."
+        if not has_success_alert:
+            update_status(user_id, "실제 구매 내역 페이지에서 최종 확인 중...")
+            logger.info("  [VERIFY] 알림창 미감지로 인한 실제 내역 페이지 대조 시작...")
+            
+            # 실제 내역 페이지에서 확인 시도
+            is_verified = False
+            try:
+                # 5초 정도 대기 후 내역 페이지 이동 (DB 반영 시간 고려)
+                time.sleep(3.0)
+                is_verified, v_msg = verify_purchase_on_site(page, numbers)
+                if is_verified:
+                    logger.info(f"  ✅ 내역 대조 결과: 구매 확인됨 ({v_msg})")
+                    return True, "구매 완료 (사이트 내역 확인됨)"
+                else:
+                    logger.error(f"  ❌ 내역 대조 결과: 구매 기록 없음 ({v_msg})")
+                    return False, f"구매 확인 실패: {v_msg}"
+            except Exception as ev:
+                logger.warning(f"  ⚠️ 내역 대조 중 오류 발생: {ev}")
+                # 대조 실패 시 보수적으로 실패 리턴
+                return False, "구매 결과가 불확실합니다. (사이트 내역 확인 불가)"
 
-        if step7_ok and not any(k in str(dialog_msgs) for k in ["부족", "한도", "실패", "오류", "초과", "불가"]):
-            # 마지막 수단: 성공 간주하되 로그에 명시
-            logger.info("  구매 프로세스 종료 (실패 증거 없음)")
-            # 실제 구매 여부는 예치금 변동으로 확인하는 것이 가장 정확하므로 메시지에 안내 포함
-            return True, "구매 완료 (서버에서 정상 처리됨)"
+        # 명확한 성공 알림이 있었던 경우
+        if has_success_alert:
+            logger.info("  ✅ 성공 알림 감지됨 (구매 완료)")
+            return True, "구매 완료 (확인됨)"
+
+        return False, "구매 상태를 확인할 수 없습니다. 예치금을 확인해 주세요."
     except Exception as e:
         logger.error(f"구매 중 예외: {e}")
         return False, f"구매 오류: {str(e)[:100]}"
+
+
+def verify_purchase_on_site(page, target_numbers):
+    """실제 동행복권 구매내역 페이지에서 방금 산 번호가 있는지 대조"""
+    try:
+        # 구매내역 페이지 이동 (최근 1일)
+        # 로또 6/45 전용 내역 페이지
+        history_url = "https://dhlottery.co.kr/myPage.do?method=lottoBuyList"
+        page.goto(history_url, wait_until="domcontentloaded", timeout=15000)
+        time.sleep(1.5)
+        
+        # 폼 제출 (조회 버튼 클릭)
+        page.evaluate("""() => {
+            const btn = document.querySelector('#btnSearch');
+            if (btn) btn.click();
+        }""")
+        time.sleep(1.5)
+        
+        # 테이블 데이터 파싱
+        # target_numbers는 [1, 2, 3, 4, 5, 6] 형태
+        target_str = ",".join(map(str, sorted(target_numbers)))
+        
+        found = page.evaluate("""(targetStr) => {
+            const rows = Array.from(document.querySelectorAll('table.tbl_data tbody tr'));
+            if (rows.length === 0 || rows[0].innerText.includes('데이타가 없습니다')) return null;
+            
+            // 가장 최근 1~2개 행만 확인
+            for (let i = 0; i < Math.min(rows.length, 3); i++) {
+                const text = rows[i].innerText;
+                // '선택번호/추첨결과' 열 또는 전체 텍스트에서 타겟 번호 확인
+                // 사이트마다 포맷이 다르므로 숫자만 추출하여 대조하는 방식
+                const numsInRow = text.match(/[0-9]{1,2}/g) || [];
+                const sortedTarget = targetStr.split(',').sort((a,b) => a-b);
+                
+                // 타겟 번호 6개가 모두 포함되어 있는지 확인
+                let matchCount = 0;
+                for (let tn of sortedTarget) {
+                    if (numsInRow.includes(tn)) matchCount++;
+                }
+                
+                if (matchCount >= 6) return "matched_row_" + i;
+            }
+            return null;
+        }""", target_str)
+        
+        if found:
+            return True, "최근 내역에서 구매 번호 확인됨"
+        return False, "최근 내역에서 일치하는 번호를 찾지 못함"
+    except Exception as e:
+        return False, f"내역 확인 중 오류: {str(e)[:50]}"
 
 
 def do_sync_history(page, user_id):
