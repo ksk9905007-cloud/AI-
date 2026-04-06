@@ -850,50 +850,66 @@ def do_purchase(page, numbers, user_id=""):
             return False, "[7/7] '구매하기' 버튼 클릭 실패"
         
         logger.info("    구매하기 클릭 완료 (팝업 대기 중)")
-        time.sleep(1.5)
+        time.sleep(1.0)
 
         # STEP 8: 구매 확인 팝업(레이어/다이얼로그) 처리
         update_status(user_id, "구매 확정 팝업 승인 중...")
         logger.info("  [8/7] 구매 확정 진행 중 (팝업 레이어/다이얼로그 승인)...")
         
-        # 팝업 레이어 승인 시도 (여러 번 반복)
-        for _ in range(8):
+        # 팝업이 뜰 때까지 잠시 대기하며 반복 시도
+        popup_approved = False
+        for i in range(12):
+            # 만약 아무런 팝업도 안 떴다면? 구매 버튼 다시 클릭 (가끔 클릭 씹힘 방지)
+            if i == 5 and not dialog_msgs and not popup_approved:
+                logger.warning("    팝업 미감지: 구매 버튼 재클릭 시도...")
+                try: frame.locator("#btnBuy").click(force=True, timeout=1000)
+                except: pass
+
             clicked_any = False
             for ctx in [page, frame]:
                 try:
                     result = ctx.evaluate("""() => {
-                        // 1. "확인" 성격의 버튼들 탐색
-                        const btns = Array.from(document.querySelectorAll('a, button, input[type="button"], input[type="submit"]'));
-                        const okBtn = btns.find(b => {
+                        // 1. 레이어 팝업(confirmLayer) 내 확인 버튼 우선
+                        const layer = document.getElementById('popupLayerConfirm') || document.querySelector('.popup_layer, .layer_pop');
+                        if (layer && (window.getComputedStyle(layer).display !== 'none')) {
+                            // 명시적인 "확인" 또는 "구매" 버튼 찾기
+                            const okBtn = Array.from(layer.querySelectorAll('a, button, input')).find(b => {
+                                const t = (b.innerText || b.value || "").replace(/\s/g, "");
+                                return t === "확인" || t === "구매" || t === "결제결정" || t === "예";
+                            });
+                            if (okBtn) { okBtn.click(); return "layer_btn_clicked"; }
+                        }
+                        
+                        // 2. 일반적인 확인 성격의 모든 버튼 탐색 (보수적)
+                        const btns = Array.from(document.querySelectorAll('a, button, input[type="button"]'));
+                        const anyOk = btns.find(b => {
                             if (b.offsetParent === null) return false;
                             const t = (b.innerText || b.value || "").replace(/\s/g, "");
                             return t === "확인" || t === "구매" || t === "결제결정" || t === "예";
                         });
+                        if (anyOk) { anyOk.click(); return "general_btn_clicked_" + (anyOk.innerText || anyOk.value); }
                         
-                        if (okBtn) {
-                            okBtn.click();
-                            return "button_clicked_" + (okBtn.innerText || okBtn.value || "no_text").substring(0,10);
-                        }
-                        
-                        // 2. ID 기반 특정 레이어 확인
-                        const layer = document.getElementById('popupLayerConfirm');
-                        if (layer && layer.style.display !== 'none' && layer.style.visibility !== 'hidden') {
-                            const layerOk = layer.querySelector('.btn_confirm, .button_ok, input[value="확인"], a, button');
-                            if (layerOk) { layerOk.click(); return "layer_ok_clicked"; }
-                        }
                         return null;
                     }""")
                     if result:
-                        logger.info(f"    승인 클릭 성공: {result}")
+                        logger.info(f"    승인 액션 수행: {result}")
                         clicked_any = True
+                        popup_approved = True
                 except:
                     pass
+            
             if clicked_any:
-                time.sleep(1.0) # 클릭 후 처리 시간 확보
-            time.sleep(0.8)
+                time.sleep(1.0)
+            
+            # 다이얼로그(native alert/confirm) 메시지가 들어왔는지도 체크
+            if dialog_msgs:
+                popup_approved = True
+            
+            time.sleep(0.6)
+            if i > 8 and popup_approved: break # 어느정도 클릭했으면 조기 종료
             
         # 결과 대기 시간을 더 충분히 가짐
-        time.sleep(3.0)
+        time.sleep(3.5)
 
         # 최종 결과 판정
         update_status(user_id, "구매 결과 최종 판정 중...")
@@ -993,17 +1009,25 @@ def verify_purchase_on_site(page, target_numbers):
             const rows = Array.from(document.querySelectorAll('table.tbl_data tbody tr'));
             if (rows.length === 0 || rows[0].innerText.includes('데이타가 없습니다')) return null;
             
-            // 가장 최근 1~2개 행만 확인
+            const targetNums = targetStr.split(',').map(Number);
+            
+            // 가장 최근 3개 행만 확인 (다량 구매 시 대비)
             for (let i = 0; i < Math.min(rows.length, 3); i++) {
                 const text = rows[i].innerText;
-                // '선택번호/추첨결과' 열 또는 전체 텍스트에서 타겟 번호 확인
-                // 사이트마다 포맷이 다르므로 숫자만 추출하여 대조하는 방식
-                const numsInRow = text.match(/[0-9]{1,2}/g) || [];
-                const sortedTarget = targetStr.split(',').sort((a,b) => a-b);
+                
+                // 번호 부분이 들어있는 <td>를 좀 더 정확히 타겟팅
+                const tds = Array.from(rows[i].querySelectorAll('td'));
+                const numberCell = tds.find(td => td.innerText.includes('[') || td.innerText.match(/[0-9]{1,2}\s+[0-9]{1,2}/));
+                const compareText = numberCell ? numberCell.innerText : text;
+
+                // 숫자만 추출하되, 날짜(2026 등)를 제외하기 위해 1~45 범위만 필터링
+                const numsInRow = (compareText.match(/[0-9]{1,2}/g) || [])
+                    .map(Number)
+                    .filter(n => n >= 1 && n <= 45);
                 
                 // 타겟 번호 6개가 모두 포함되어 있는지 확인
                 let matchCount = 0;
-                for (let tn of sortedTarget) {
+                for (let tn of targetNums) {
                     if (numsInRow.includes(tn)) matchCount++;
                 }
                 
