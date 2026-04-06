@@ -1044,18 +1044,37 @@ def verify_purchase_on_site(page, target_numbers):
                 const rows = Array.from(document.querySelectorAll('table.tbl_data tbody tr'));
                 if (rows.length === 0 || rows[0].innerText.includes('데이타가 없습니다')) return null;
                 
-                const targetNums = targetStr.split(',').map(Number);
-                for (let i = 0; i < Math.min(rows.length, 3); i++) {
-                    const tds = Array.from(rows[i].querySelectorAll('td'));
-                    const numberCell = tds.find(td => td.innerText.includes('[') || td.innerText.match(/[0-9]{1,2}\s+[0-9]{1,2}/));
-                    const compareText = numberCell ? numberCell.innerText : rows[i].innerText;
-                    const numsInRow = (compareText.match(/[0-9]{1,2}/g) || []).map(Number).filter(n => n >= 1 && n <= 45);
+                const targetNums = targetStr.split(',').map(Number).sort((a,b) => a-b);
+                const targetJoined = targetNums.join(',');
+
+                for (let i = 0; i < Math.min(rows.length, 5); i++) {
+                    const row = rows[i];
+                    // 행 전체 텍스트 + 모든 이미지의 alt 속성 + 모든 요소의 텍스트 수집
+                    let combinedText = row.innerText + " ";
+                    row.querySelectorAll('img').forEach(img => combinedText += (img.alt || "") + " ");
+                    row.querySelectorAll('span, div, b').forEach(el => combinedText += (el.innerText || "") + " ");
+
+                    // 숫자만 추출 (1~45 범위)
+                    const numsInRow = (combinedText.match(/[0-9]{1,2}/g) || [])
+                        .map(Number)
+                        .filter(n => n >= 1 && n <= 45);
                     
+                    // 중복 제거 및 정렬
+                    const uniqueNums = Array.from(new Set(numsInRow)).sort((a,b) => a-b);
+                    
+                    // 방법 1: 타겟 번호 6개가 모두 포함되어 있는지 확인
                     let matchCount = 0;
                     for (let tn of targetNums) {
-                        if (numsInRow.includes(tn)) matchCount++;
+                        if (uniqueNums.includes(tn)) matchCount++;
                     }
-                    if (matchCount >= 6) return true;
+                    
+                    if (matchCount >= 6) return "matched_row_" + i;
+
+                    // 방법 2: 텍스트 내에서 "01,02,03..." 형태의 연속성 확인
+                    const textDigits = combinedText.replace(/[^0-9]/g, "|");
+                    if (targetNums.every(tn => textDigits.includes("|" + tn + "|") || textDigits.includes("|0" + tn + "|"))) {
+                        return "matched_sequential_" + i;
+                    }
                 }
                 return null;
             }""", target_str)
