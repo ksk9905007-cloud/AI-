@@ -802,6 +802,9 @@ def do_purchase(page, numbers, user_id=""):
             
         if not step6_ok:
             try:
+                # 마우스 호버 후 클릭 (더 사람처럼 보이게)
+                frame.locator("#btnSelectNum").hover()
+                time.sleep(0.1)
                 frame.locator("#btnSelectNum").click(force=True, timeout=2000)
                 step6_ok = True
             except:
@@ -842,6 +845,9 @@ def do_purchase(page, numbers, user_id=""):
             pass
         if not step7_ok:
             try:
+                # 마우스 호버 후 클릭
+                frame.locator("#btnBuy").hover()
+                time.sleep(0.1)
                 frame.locator("#btnBuy").click(force=True, timeout=2000)
                 step7_ok = True
             except:
@@ -979,9 +985,15 @@ def do_purchase(page, numbers, user_id=""):
             # 실제 내역 페이지에서 확인 시도
             is_verified = False
             try:
-                # 5초 정도 대기 후 내역 페이지 이동 (DB 반영 시간 고려)
-                time.sleep(3.0)
-                is_verified, v_msg = verify_purchase_on_site(page, numbers)
+                # 사이트 내역 페이지의 지연 시간을 대폭 증가 (최대 10초)
+                # 가끔 DB 반영이 늦어 구매 내역이 늦게 뜨는 경우 대비
+                update_status(user_id, "구매 후 시스템 반영 대기 중 (최대 10초)...")
+                for w in range(5):
+                    time.sleep(2.0)
+                    is_verified, v_msg = verify_purchase_on_site(page, numbers)
+                    if is_verified: break
+                    logger.warning(f"    [VERIFY] 내역 확인 재시도 ({w+1}/5)...")
+
                 if is_verified:
                     logger.info(f"  ✅ 내역 대조 결과: 구매 확인됨 ({v_msg})")
                     return True, "구매 완료 (사이트 내역 확인됨)"
@@ -1005,59 +1017,53 @@ def do_purchase(page, numbers, user_id=""):
 
 
 def verify_purchase_on_site(page, target_numbers):
-    """실제 동행복권 구매내역 페이지에서 방금 산 번호가 있는지 대조"""
+    """실제 동행복권 구매내역 페이지에서 방금 산 번호가 있는지 대조 (멀티 새로고침 적용)"""
     try:
-        # 구매내역 페이지 이동 (최근 1일)
-        # 로또 6/45 전용 내역 페이지
         history_url = "https://dhlottery.co.kr/myPage.do?method=lottoBuyList"
-        page.goto(history_url, wait_until="domcontentloaded", timeout=15000)
-        time.sleep(1.5)
         
-        # 폼 제출 (조회 버튼 클릭)
-        page.evaluate("""() => {
-            const btn = document.querySelector('#btnSearch');
-            if (btn) btn.click();
-        }""")
-        time.sleep(1.5)
-        
-        # 테이블 데이터 파싱
-        # target_numbers는 [1, 2, 3, 4, 5, 6] 형태
-        target_str = ",".join(map(str, sorted(target_numbers)))
-        
-        found = page.evaluate("""(targetStr) => {
-            const rows = Array.from(document.querySelectorAll('table.tbl_data tbody tr'));
-            if (rows.length === 0 || rows[0].innerText.includes('데이타가 없습니다')) return null;
+        # 최대 3회 새로고침 조회 (DB 반영 지연 대비)
+        for attempt in range(3):
+            if attempt > 0:
+                logger.warning(f"    [VERIFY] 내역 미감지로 인한 페이지 새로고침 ({attempt}/2)...")
+                time.sleep(2.0)
             
-            const targetNums = targetStr.split(',').map(Number);
+            page.goto(history_url, wait_until="domcontentloaded", timeout=15000)
+            time.sleep(1.0)
             
-            // 가장 최근 3개 행만 확인 (다량 구매 시 대비)
-            for (let i = 0; i < Math.min(rows.length, 3); i++) {
-                const text = rows[i].innerText;
+            # 조회 버튼 클릭 (필요 시)
+            page.evaluate("""() => {
+                const btn = document.querySelector('#btnSearch');
+                if (btn) btn.click();
+            }""")
+            time.sleep(1.5)
+            
+            # 테이블 데이터 파싱
+            target_str = ",".join(map(str, sorted(target_numbers)))
+            
+            found = page.evaluate("""(targetStr) => {
+                const rows = Array.from(document.querySelectorAll('table.tbl_data tbody tr'));
+                if (rows.length === 0 || rows[0].innerText.includes('데이타가 없습니다')) return null;
                 
-                // 번호 부분이 들어있는 <td>를 좀 더 정확히 타겟팅
-                const tds = Array.from(rows[i].querySelectorAll('td'));
-                const numberCell = tds.find(td => td.innerText.includes('[') || td.innerText.match(/[0-9]{1,2}\s+[0-9]{1,2}/));
-                const compareText = numberCell ? numberCell.innerText : text;
-
-                // 숫자만 추출하되, 날짜(2026 등)를 제외하기 위해 1~45 범위만 필터링
-                const numsInRow = (compareText.match(/[0-9]{1,2}/g) || [])
-                    .map(Number)
-                    .filter(n => n >= 1 && n <= 45);
-                
-                // 타겟 번호 6개가 모두 포함되어 있는지 확인
-                let matchCount = 0;
-                for (let tn of targetNums) {
-                    if (numsInRow.includes(tn)) matchCount++;
+                const targetNums = targetStr.split(',').map(Number);
+                for (let i = 0; i < Math.min(rows.length, 3); i++) {
+                    const tds = Array.from(rows[i].querySelectorAll('td'));
+                    const numberCell = tds.find(td => td.innerText.includes('[') || td.innerText.match(/[0-9]{1,2}\s+[0-9]{1,2}/));
+                    const compareText = numberCell ? numberCell.innerText : rows[i].innerText;
+                    const numsInRow = (compareText.match(/[0-9]{1,2}/g) || []).map(Number).filter(n => n >= 1 && n <= 45);
+                    
+                    let matchCount = 0;
+                    for (let tn of targetNums) {
+                        if (numsInRow.includes(tn)) matchCount++;
+                    }
+                    if (matchCount >= 6) return true;
                 }
-                
-                if (matchCount >= 6) return "matched_row_" + i;
-            }
-            return null;
-        }""", target_str)
+                return null;
+            }""", target_str)
+            
+            if found:
+                return True, "최근 내역에서 구매 번호 일치 확인"
         
-        if found:
-            return True, "최근 내역에서 구매 번호 확인됨"
-        return False, "최근 내역에서 일치하는 번호를 찾지 못함"
+        return False, "페이지 새로고침 후에도 일치하는 번호를 찾지 못함"
     except Exception as e:
         return False, f"내역 확인 중 오류: {str(e)[:50]}"
 
@@ -1320,7 +1326,12 @@ def automate_purchase(user_id, user_pw, numbers):
                 "--single-process",
                 "--js-flags=--max-old-space-size=128",
                 "--disable-blink-features=AutomationControlled",
-                "--lang=ko-KR"
+                "--lang=ko-KR",
+                "--window-size=1920,1080",
+                "--disable-infobars",
+                "--no-first-run",
+                "--no-service-autorun",
+                "--password-store=basic"
             ]
         )
         context = browser.new_context(
