@@ -790,13 +790,30 @@
         <div id="currentStepStatus" style="font-size: 0.95rem; font-weight: 700; color: #fbbf24; margin-bottom: 1rem; padding: 0.75rem; background: rgba(251, 191, 36, 0.1); border-radius: 0.75rem; border: 1px solid rgba(251, 191, 36, 0.2);">
             서버 연결 시도 중...
         </div>
-        <div id="statusLogConsole" style="height: 220px; overflow-y: auto; background: #0f172a; border-radius: 1rem; padding: 1.25rem; font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 0.8rem; line-height: 1.6; border: 1px solid #334155; scroll-behavior: smooth;">
+        <div id="statusLogConsole" style="height: 180px; overflow-y: auto; background: #0f172a; border-radius: 1rem; padding: 1.25rem; font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 0.8rem; line-height: 1.6; border: 1px solid #334155; scroll-behavior: smooth;">
             <div style="color: #64748b;">[SYSTEM] 엔진 초기화 대기 중...</div>
         </div>
+        
+        <!-- 실시간 화면 표시 영역 추가 -->
+        <div id="liveViewContainer" style="margin-top: 1rem; border-radius: 1rem; overflow: hidden; border: 2px solid #334155; background: #000; display: none;">
+            <div style="padding: 4px 10px; background: #334155; color: #94a3b8; font-size: 0.7rem; font-weight: 800; display: flex; justify-content: space-between; align-items: center;">
+                <span>LIVE SERVER VIEW</span>
+                <span class="ai-pulse" style="width: 8px; height: 8px; background: #ef4444; border-radius: 50%;"></span>
+            </div>
+            <img id="liveViewImg" src="" style="width: 100%; display: block; filter: brightness(0.9);" alt="Server Screen"/>
+        </div>
+
         <p style="font-size: 0.75rem; color: #94a3b8; margin-top: 1.25rem; text-align: center; line-height: 1.4;">
             🚀 보안 브라우저 엔진 구동 중입니다.<br/>
             네트워크 상황에 따라 15~30초 정도 소요될 수 있으니 잠시만 기다려주세요.
         </p>
+
+        <!-- 구매 취소 버튼 추가 -->
+        <div style="margin-top: 1.5rem; display: flex; justify-content: center;">
+            <button id="cancelPurchaseBtn" class="btn btn-outline btn-sm" onclick="cancelPurchase()" style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2); color: #f87171; width: 100%;">
+                🛑 구매 중단 (서버 엔진 종료)
+            </button>
+        </div>
     </div>
 </div>
 <script>
@@ -1159,9 +1176,18 @@
         const modal = document.getElementById('progressModal');
         const console = document.getElementById('statusLogConsole');
         const current = document.getElementById('currentStepStatus');
+        const liveView = document.getElementById('liveViewContainer');
         
         console.innerHTML = '<div style="color: #64748b;">[SYSTEM] 구매 프로세스 시작...</div>';
         current.innerText = '엔진 초기화 중...';
+        liveView.style.display = 'none';
+        
+        const cancelBtn = document.getElementById('cancelPurchaseBtn');
+        if(cancelBtn) {
+            cancelBtn.disabled = false;
+            cancelBtn.innerText = '🛑 구매 중단 (서버 엔진 종료)';
+        }
+
         modal.style.display = 'flex';
         setTimeout(() => modal.classList.add('open'), 10);
     }
@@ -1175,14 +1201,33 @@
     function startStatusPolling(uid) {
         const console = document.getElementById('statusLogConsole');
         const current = document.getElementById('currentStepStatus');
+        const liveImg = document.getElementById('liveViewImg');
+        const liveContainer = document.getElementById('liveViewContainer');
+        const cancelBtn = document.getElementById('cancelPurchaseBtn');
         
         const interval = setInterval(async () => {
             try {
+                // 1. 상태 및 로그 폴링
                 const resp = await fetch(`${API_BASE}/purchase_status?id=${uid}`);
                 const data = await resp.json();
                 
+                // 2. 스크린샷 폴링 (캐시 방지를 위해 timestamp 추가)
+                const screenUrl = `${API_BASE}/screenshot?id=${uid}&t=${Date.now()}`;
+                const imgCheck = new Image();
+                imgCheck.onload = () => {
+                    liveImg.src = screenUrl;
+                    liveContainer.style.display = 'block';
+                };
+                imgCheck.src = screenUrl;
+
                 if (data.status) {
                     current.innerText = data.status;
+                    
+                    // 구매 완료되거나 취소된 경우 버튼 비활성화
+                    if (data.result && cancelBtn) {
+                        cancelBtn.disabled = true;
+                        cancelBtn.innerText = '종료 중...';
+                    }
                     if (data.logs && data.logs.length > 0) {
                         console.innerHTML = data.logs.map(log => {
                             let color = "#cbd5e1";
@@ -1223,6 +1268,27 @@
             }
         }, 1000);
         return interval;
+    }
+
+    async function cancelPurchase() {
+        const uid = localStorage.getItem('dhl_id') || savedUserId;
+        if (!uid) return;
+
+        const btn = document.getElementById('cancelPurchaseBtn');
+        btn.disabled = true;
+        btn.innerText = '⏳ 중단 요청 중...';
+
+        try {
+            const resp = await fetch(`${API_BASE}/cancel_purchase`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: uid })
+            });
+            const result = await resp.json();
+            showToast(result.message);
+        } catch (e) {
+            showToast("취소 요청 실패");
+        }
     }
 
     function filterHistory() {

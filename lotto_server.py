@@ -128,6 +128,8 @@ CACHE_TTL = 3600  # 1시간
 
 # 진행 상황 추적용 전역 변수
 PURCHASE_STATUS = {} # { "user_id": { "status": "대기 중", "logs": [], "result": None } }
+_SCREENSHOTS = {} # { "user_id": b'...' }
+_CANCEL_REQUESTS = set() # { "user_id", ... }
 
 def update_status(user_id, msg, result=None):
     """현재 진행 상황을 전역 변수에 기록하여 클라이언트에 전달"""
@@ -156,7 +158,7 @@ def get_lotto_info_by_no(draw_no):
         return _lotto_cache[draw_no]
 
     try:
-        is_cloud = os.environ.get('RENDER') or os.environ.get('PORT') or os.environ.get('DYNO')
+        is_cloud = os.environ.get('RENDER') or os.environ.get('DYNO')
         with sync_playwright() as p:
             browser = p.chromium.launch(
                 headless=bool(is_cloud),
@@ -536,6 +538,18 @@ def find_game_frame(page):
     logger.warning("    [WARNING] 보안 프레임을 찾지 못해 메인 프레임을 강제로 할당합니다.")
     return page.main_frame
 
+def capture_screen(page, user_id):
+    """현재 브라우저 화면을 캡처하여 메모리에 저장"""
+    if not user_id: return
+    uid = user_id.lower().strip()
+    try:
+        # 화면이 너무 크면 전송량이 많으므로 크기 조절 (스케일링)
+        # Playwright screenshot allows saving to buffer
+        img_bytes = page.screenshot(type="jpeg", quality=60)
+        _SCREENSHOTS[uid] = img_bytes
+    except Exception as e:
+        logger.warning(f"  [SCREENSHOT] 캡처 실패: {e}")
+
 
 # ─────────────────────────────────────────────────────────
 #  번호 선택
@@ -598,10 +612,20 @@ def do_purchase(page, numbers, user_id=""):
         dialog_msgs.append(dialog.message)
         dialog.accept()
 
+    def check_cancel():
+        if not user_id: return False
+        uid = user_id.lower().strip()
+        if uid in _CANCEL_REQUESTS:
+            logger.warning(f"  [CANCEL] 사용자({uid})로부터 취소 요청 수신")
+            return True
+        return False
+
     page.on("dialog", handle_dialog)
+    capture_screen(page, user_id)
 
     try:
         # STEP 1: 구매 페이지 이동
+        if check_cancel(): return False, "사용자가 구매를 취소했습니다."
         logger.info("  [1/7] 구매 페이지(game645.do) 이동...")
         # 직접 이동 전 메인 페이지를 한 번 거쳐 쿠키/Referer 유지
         try:
@@ -615,6 +639,7 @@ def do_purchase(page, numbers, user_id=""):
             try: page.goto("https://ol.dhlottery.co.kr/olotto/game/game645.do", wait_until="load", timeout=20000)
             except: pass
         time.sleep(2.0)
+        capture_screen(page, user_id)
 
         try:
             page.evaluate("""() => {
@@ -631,6 +656,7 @@ def do_purchase(page, numbers, user_id=""):
 
         # 접속 대기열(트래픽 제어) 감지 및 대기
         for _ in range(15):
+            if check_cancel(): return False, "사용자가 구매를 취소했습니다."
             is_waiting = page.evaluate("""() => {
                 const wait = document.getElementById('waitPage');
                 if (wait && (window.getComputedStyle(wait).display !== 'none')) return true;
@@ -658,6 +684,7 @@ def do_purchase(page, numbers, user_id=""):
             }""")
         except: pass
 
+        if check_cancel(): return False, "사용자가 구매를 취소했습니다."
         frame = find_game_frame(page)
         if not frame:
             # 타겟 프레임이 안 보이면 현재 페이지 전체 텍스트 로깅 (디버깅)
@@ -709,15 +736,25 @@ def do_purchase(page, numbers, user_id=""):
             # 마지막 수단: 프레임 새로고침 시도 (옵션)
             logger.warning("  [RETRY] UI 로드 실패. 프레임 URL 다시 접근 중...")
             try:
+                # 프레임이 Detached 되었을 수 있으므로 다시 찾기
+                frame = find_game_frame(page)
                 frame.goto("https://ol.dhlottery.co.kr/olotto/game/game645.do", wait_until="networkidle", timeout=20000)
                 time.sleep(3.0)
+                capture_screen(page, user_id)
                 # 재확인
                 label_count = frame.evaluate("() => document.querySelectorAll('label[for^=\"check645num\"]').length")
                 if label_count > 0:
                     ui_loaded = True
                     logger.info(f"    [OK] 재시도 후 UI 확인 완료 (label 수: {label_count})")
             except Exception as e:
-                logger.error(f"  재시도 실패: {e}")
+                logger.error(f"  재시도 실패 (Detached or Timeout): {e}")
+                # 프레임이 완전히 깨졌다면 페이지 자체를 다시 로드 시도
+                try:
+                    page.goto("https://ol.dhlottery.co.kr/olotto/game/game645.do", wait_until="load", timeout=15000)
+                    time.sleep(3.0)
+                    frame = find_game_frame(page)
+                    ui_loaded = frame.evaluate("() => document.querySelectorAll('label[for^=\"check645num\"]').length > 0")
+                except: pass
 
         if not ui_loaded:
             try:
@@ -728,6 +765,7 @@ def do_purchase(page, numbers, user_id=""):
             return False, "번호 선택 UI 로드 실패. 사이트 연결이 원활하지 않습니다."
 
         # STEP 4: 혼합선택 탭 활성화
+        if check_cancel(): return False, "사용자가 구매를 취소했습니다."
         logger.info("  [4/7] '혼합선택' 탭 활성화 시도...")
         tab_ok = False
         for _ in range(5):
@@ -760,7 +798,8 @@ def do_purchase(page, numbers, user_id=""):
             if not ok:
                 fail_count += 1
             time.sleep(0.08)
-
+        
+        capture_screen(page, user_id)
         time.sleep(0.3)
 
         # 실제 체크된 수 최종 확인 및 보정
@@ -783,6 +822,7 @@ def do_purchase(page, numbers, user_id=""):
             pass
 
         # STEP 6: 선택완료(확인) 클릭
+        if check_cancel(): return False, "사용자가 구매를 취소했습니다."
         update_status(user_id, "선택완료 버튼 클릭...")
         logger.info("  [6/7] '선택완료' 클릭...")
         step6_ok = False
@@ -830,10 +870,13 @@ def do_purchase(page, numbers, user_id=""):
             time.sleep(0.5)
 
         # STEP 7: 구매하기 클릭 (frame 내 #btnBuy만)
+        if check_cancel(): return False, "사용자가 구매를 취소했습니다."
         update_status(user_id, "최종 구매하기 버튼 클릭...")
         logger.info("  [7/7] '구매하기' 클릭...")
         step7_ok = False
         try:
+            # 실 결제 직전 마지막 취소 확인
+            if check_cancel(): return False, "사용자가 결제 직전 구매를 취소했습니다."
             r = frame.evaluate("""() => {
                 const btn = document.getElementById('btnBuy');
                 if (btn) { btn.click(); return 'ok'; }
@@ -857,6 +900,7 @@ def do_purchase(page, numbers, user_id=""):
         
         logger.info("    구매하기 클릭 완료 (팝업 대기 중)")
         time.sleep(1.0)
+        capture_screen(page, user_id)
 
         # STEP 8: 구매 확인 팝업(레이어/다이얼로그) 처리
         update_status(user_id, "구매 확정 팝업 승인 중...")
@@ -1331,7 +1375,7 @@ def do_sync_history(page, user_id):
 def automate_purchase(user_id, user_pw, numbers):
     update_status(user_id, "브라우저 엔진 시작 중...")
     with sync_playwright() as p:
-        is_cloud = os.environ.get('RENDER') or os.environ.get('PORT') or os.environ.get('DYNO')
+        is_cloud = os.environ.get('RENDER') or os.environ.get('DYNO')
         update_status(user_id, f"서버 환경 분석: {'클라우드' if is_cloud else '로컬'}")
         
         browser = p.chromium.launch(
@@ -1403,6 +1447,11 @@ def automate_purchase_wrapper(user_id, user_pw, numbers):
     except Exception as e:
         logger.error(f"Background purchase error: {e}")
         update_status(user_id, "엔진 비정상 종료", result={"success": False, "message": str(e)})
+    finally:
+        # 종료 시 취소 요청 플래그 제거
+        uid = user_id.lower().strip()
+        if uid in _CANCEL_REQUESTS:
+            _CANCEL_REQUESTS.remove(uid)
 
 
 # ─────────────────────────────────────────────────────────
@@ -1420,6 +1469,31 @@ def get_purchase_status_endpoint():
         return jsonify({"status": "알 수 없음", "logs": []})
     status = PURCHASE_STATUS.get(uid, {"status": "진행 전", "logs": ["기록된 데이터가 없습니다."], "result": None})
     return jsonify(status)
+
+
+@app.route('/screenshot')
+def get_screenshot_endpoint():
+    uid = request.args.get('id', '').lower().strip()
+    if not uid or uid not in _SCREENSHOTS:
+        # 빈 이미지나 404
+        return "Not Found", 404
+    
+    from flask import make_response
+    response = make_response(_SCREENSHOTS[uid])
+    response.headers.set('Content-Type', 'image/jpeg')
+    return response
+
+
+@app.route('/cancel_purchase', methods=['POST'])
+def cancel_purchase_endpoint():
+    data = request.json
+    uid = data.get('id', '').lower().strip()
+    if not uid:
+        return jsonify({"success": False, "message": "아이디가 필요합니다."})
+    
+    _CANCEL_REQUESTS.add(uid)
+    update_status(uid, "🛑 사용자 요청으로 구매 취소 중...")
+    return jsonify({"success": True, "message": "취소 요청이 접수되었습니다. 잠시 후 엔진이 종료됩니다."})
 
 
 @app.route('/health')
@@ -1489,7 +1563,7 @@ def sync_history_endpoint():
 
     try:
         with sync_playwright() as p:
-            is_cloud = os.environ.get('RENDER') or os.environ.get('PORT') or os.environ.get('DYNO')
+            is_cloud = os.environ.get('RENDER') or os.environ.get('DYNO')
             browser = p.chromium.launch(
                 headless=bool(is_cloud),
                 args=[
